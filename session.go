@@ -1299,9 +1299,9 @@ func availableScopes(baseRef string) []string {
 }
 
 // GetSessionInfoScoped returns session metadata filtered to a specific diff scope.
-// When scope is "" or "all", delegates to GetSessionInfo.
+// When scope is "" or "all", or in file mode (scopes only apply to git), delegates to GetSessionInfo.
 func (s *Session) GetSessionInfoScoped(scope string) SessionInfo {
-	if scope == "" || scope == "all" {
+	if scope == "" || scope == "all" || s.Mode == "files" {
 		return s.GetSessionInfo()
 	}
 
@@ -1371,9 +1371,9 @@ func (s *Session) GetSessionInfoScoped(scope string) SessionInfo {
 }
 
 // GetFileDiffSnapshotScoped returns diff data for a file filtered by scope.
-// When scope is "" or "all", delegates to GetFileDiffSnapshot.
+// When scope is "" or "all", or in file mode (scopes only apply to git), delegates to GetFileDiffSnapshot.
 func (s *Session) GetFileDiffSnapshotScoped(path, scope string) (map[string]any, bool) {
-	if scope == "" || scope == "all" {
+	if scope == "" || scope == "all" || s.Mode == "files" {
 		return s.GetFileDiffSnapshot(path)
 	}
 

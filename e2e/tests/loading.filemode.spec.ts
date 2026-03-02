@@ -76,6 +76,37 @@ test.describe('File Mode — Markdown Rendering', () => {
   });
 });
 
+test.describe('File Mode — Scope Cookie Resilience', () => {
+  test('renders files even when scope cookie is set to non-all value', async ({ page }) => {
+    // Simulate a user who previously used git mode with a non-"all" scope.
+    // The scope cookie persists across sessions; file mode must ignore it.
+    await page.context().addCookies([
+      { name: 'crit-diff-scope', value: 'staged', domain: 'localhost', path: '/' },
+    ]);
+    await page.goto('/');
+    await expect(page.locator('.loading')).toBeHidden({ timeout: 10_000 });
+    const sections = page.locator('.file-section');
+    await expect(sections).toHaveCount(3);
+    // Verify markdown content actually rendered (not just empty sections)
+    const mdSection = page.locator('.file-section').filter({ hasText: 'plan.md' });
+    const docWrapper = mdSection.locator('.document-wrapper');
+    await expect(docWrapper).toBeVisible();
+    const lineBlocks = mdSection.locator('.line-block');
+    const count = await lineBlocks.count();
+    expect(count).toBeGreaterThan(0);
+  });
+
+  test('renders files even when scope cookie is set to branch', async ({ page }) => {
+    await page.context().addCookies([
+      { name: 'crit-diff-scope', value: 'branch', domain: 'localhost', path: '/' },
+    ]);
+    await page.goto('/');
+    await expect(page.locator('.loading')).toBeHidden({ timeout: 10_000 });
+    const sections = page.locator('.file-section');
+    await expect(sections).toHaveCount(3);
+  });
+});
+
 test.describe('File Mode — Code Files', () => {
   test('code files show "No changes" placeholder (no git diff available)', async ({ page }) => {
     await loadPage(page);
