@@ -40,14 +40,14 @@ export default defineConfig({
     {
       command: `bash setup-fixtures.sh ${GIT_PORT}`,
       url: `http://localhost:${GIT_PORT}/api/session`,
-      reuseExistingServer: !process.env.CI,
+      reuseExistingServer: true,
       timeout: 30_000,
       stdout: 'pipe',
     },
     {
       command: `bash setup-fixtures-filemode.sh ${FILE_PORT}`,
       url: `http://localhost:${FILE_PORT}/api/session`,
-      reuseExistingServer: !process.env.CI,
+      reuseExistingServer: true,
       timeout: 30_000,
       stdout: 'pipe',
     },
