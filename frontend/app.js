@@ -1252,8 +1252,8 @@
       });
       header.appendChild(toggle);
 
-      // Change navigation widget (only in document view)
-      if (file.viewMode === 'document') {
+      // Change navigation widget (only in document view, file mode only)
+      if (file.viewMode === 'document' && session.mode !== 'git') {
         var changeNav = document.createElement('div');
         changeNav.className = 'change-nav';
         changeNav.innerHTML =
@@ -1662,7 +1662,7 @@
 
     const commentRangeSet = buildCommentedRangeSet(file.comments);
 
-    const changedLines = (file.viewMode === 'document') ? getChangedLineNumbers(file) : null;
+    const changedLines = (file.viewMode === 'document' && session.mode !== 'git') ? getChangedLineNumbers(file) : null;
 
     for (let bi = 0; bi < file.lineBlocks.length; bi++) {
       const block = file.lineBlocks[bi];
@@ -1710,14 +1710,16 @@
         lineBlockEl.classList.add('focused');
       }
 
-      // Line number gutter
+      // Line number gutter (hidden in git mode — line numbers are only meaningful for file-mode reviews)
       const gutter = document.createElement('div');
       gutter.className = 'line-gutter';
 
-      const lineNum = document.createElement('span');
-      lineNum.className = 'line-num';
-      lineNum.textContent = block.startLine;
-      gutter.appendChild(lineNum);
+      if (session.mode !== 'git') {
+        const lineNum = document.createElement('span');
+        lineNum.className = 'line-num';
+        lineNum.textContent = block.startLine;
+        gutter.appendChild(lineNum);
+      }
 
       // Comment gutter (separate column between line numbers and content)
       const commentGutter = document.createElement('div');
