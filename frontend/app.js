@@ -960,14 +960,17 @@
     for (var i = 0; i < allFiles.length; i++) {
       allFiles[i].classList.toggle('active', allFiles[i].dataset.treePath === filePath);
     }
-    // Scroll active item into view within the tree panel
+    // Scroll active item into view within the tree panel (manual scroll
+    // to avoid scrollIntoView affecting ancestor scroll containers)
     var activeEl = document.querySelector('.tree-file.active');
     if (activeEl) {
       var panel = document.getElementById('fileTreeBody');
       var rect = activeEl.getBoundingClientRect();
       var panelRect = panel.getBoundingClientRect();
-      if (rect.top < panelRect.top || rect.bottom > panelRect.bottom) {
-        activeEl.scrollIntoView({ block: 'nearest' });
+      if (rect.top < panelRect.top) {
+        panel.scrollTop += rect.top - panelRect.top;
+      } else if (rect.bottom > panelRect.bottom) {
+        panel.scrollTop += rect.bottom - panelRect.bottom;
       }
     }
   }
@@ -1060,11 +1063,7 @@
     var file = getFileByPath(filePath);
     if (file) file.collapsed = false;
     sectionEl.open = true;
-    var headerEl = sectionEl.querySelector('.file-header');
-    var mainHeader = document.querySelector('.header');
-    var offset = (mainHeader ? mainHeader.offsetHeight : 49) + 8;
-    var y = headerEl.getBoundingClientRect().top + window.scrollY - offset;
-    window.scrollTo({ top: y, behavior: 'smooth' });
+    sectionEl.scrollIntoView({ block: 'start', behavior: 'instant' });
     updateTreeActive(filePath);
   }
 

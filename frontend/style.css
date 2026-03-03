@@ -1390,7 +1390,7 @@ body.dragging .line-comment-gutter.drag-range:not(.drag-endpoint) .line-add { op
 
 /* ===== File Sections ===== */
 .file-section {
-  scroll-margin-top: var(--header-height, 49px); /* accounts for sticky app header */
+  scroll-margin-top: calc(var(--header-height, 49px) + 8px); /* accounts for sticky app header + gap */
 }
 .file-header {
   position: -webkit-sticky;

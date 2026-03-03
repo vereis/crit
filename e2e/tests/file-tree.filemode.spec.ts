@@ -48,6 +48,27 @@ test.describe('File Tree — File Mode', () => {
     await expect(section).toBeInViewport();
   });
 
+  test('clicking a file in tree scrolls its header to the top of viewport', async ({ page }) => {
+    // Scroll to the bottom so we need to scroll back up
+    await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
+
+    // Click the first file (plan.md) in the tree
+    const treeFile = page.locator('.tree-file', {
+      has: page.locator('.tree-file-name', { hasText: 'plan.md' }),
+    });
+    await treeFile.click();
+
+    // The file header should be near the top of the viewport (below the sticky header)
+    const section = page.locator('.file-section').filter({ hasText: 'plan.md' });
+    const header = section.locator('.file-header');
+    await expect(async () => {
+      const box = await header.boundingBox();
+      expect(box).toBeTruthy();
+      // Should be positioned just below the sticky header (~49px + 8px padding)
+      expect(box!.y).toBeLessThan(100);
+    }).toPass();
+  });
+
   test('clicking a file marks it as active', async ({ page }) => {
     const treeFile = page.locator('.tree-file', {
       has: page.locator('.tree-file-name', { hasText: 'plan.md' }),
