@@ -1,15 +1,14 @@
 import { test, expect } from '@playwright/test';
+import { loadPage } from './helpers';
 
 test.describe('Page Loading', () => {
   test('page loads without errors, loading disappears, file sections appear', async ({ page }) => {
-    await page.goto('/');
-    await expect(page.locator('.loading')).toBeHidden({ timeout: 10_000 });
+    await loadPage(page);
     await expect(page.locator('.file-section')).not.toHaveCount(0);
   });
 
   test('branch name "feat/add-auth" is shown in header', async ({ page }) => {
-    await page.goto('/');
-    await expect(page.locator('.loading')).toBeHidden({ timeout: 10_000 });
+    await loadPage(page);
 
     const branchContext = page.locator('#branchContext');
     await expect(branchContext).toBeVisible();
@@ -19,15 +18,13 @@ test.describe('Page Loading', () => {
   });
 
   test('document title contains "Crit — feat/add-auth"', async ({ page }) => {
-    await page.goto('/');
-    await expect(page.locator('.loading')).toBeHidden({ timeout: 10_000 });
+    await loadPage(page);
 
     await expect(page).toHaveTitle(/Crit — feat\/add-auth/);
   });
 
   test('diff mode toggle is visible in git mode', async ({ page }) => {
-    await page.goto('/');
-    await expect(page.locator('.loading')).toBeHidden({ timeout: 10_000 });
+    await loadPage(page);
 
     const diffToggle = page.locator('#diffModeToggle');
     await expect(diffToggle).toBeVisible();
@@ -36,8 +33,7 @@ test.describe('Page Loading', () => {
 
 test.describe('File Tree', () => {
   test('files have correct status icons', async ({ page }) => {
-    await page.goto('/');
-    await expect(page.locator('.loading')).toBeHidden({ timeout: 10_000 });
+    await loadPage(page);
 
     // Added files: plan.md, handler.js, and config.yaml (untracked)
     const addedIcons = page.locator('.tree-file-status-icon.added');
@@ -53,8 +49,7 @@ test.describe('File Tree', () => {
   });
 
   test('clicking a file in the tree scrolls to its section', async ({ page }) => {
-    await page.goto('/');
-    await expect(page.locator('.loading')).toBeHidden({ timeout: 10_000 });
+    await loadPage(page);
 
     // Find a tree-file entry for plan.md and click it
     const treeFile = page.locator('.tree-file', { has: page.locator('.tree-file-name', { hasText: 'plan.md' }) });
@@ -68,8 +63,7 @@ test.describe('File Tree', () => {
   });
 
   test('file tree header shows +/- stats', async ({ page }) => {
-    await page.goto('/');
-    await expect(page.locator('.loading')).toBeHidden({ timeout: 10_000 });
+    await loadPage(page);
 
     const stats = page.locator('#fileTreeStats');
     await expect(stats).toBeVisible();

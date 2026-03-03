@@ -1,48 +1,5 @@
-import { test, expect, type Page, type APIRequestContext } from '@playwright/test';
-
-// Helper: clean all comments via API so each test starts fresh.
-async function clearAllComments(request: APIRequestContext) {
-  const sessionRes = await request.get('/api/session');
-  const session = await sessionRes.json();
-  const files = session.files || [];
-
-  for (const f of files) {
-    const commentsRes = await request.get(`/api/file/comments?path=${encodeURIComponent(f.path)}`);
-    const comments = await commentsRes.json();
-    if (Array.isArray(comments)) {
-      for (const c of comments) {
-        await request.delete(`/api/comment/${c.id}?path=${encodeURIComponent(f.path)}`);
-      }
-    }
-  }
-}
-
-// Helper: navigate and wait for page load
-async function loadPage(page: Page) {
-  await page.goto('/');
-  await expect(page.locator('.loading')).toBeHidden({ timeout: 10_000 });
-}
-
-// Helper: scope selectors to plan.md file section
-function mdSection(page: Page) {
-  return page.locator('.file-section').filter({ hasText: 'plan.md' });
-}
-
-// Helper: perform a mouse drag between two elements
-async function dragBetween(page: Page, startEl: ReturnType<Page['locator']>, endEl: ReturnType<Page['locator']>) {
-  const startBox = await startEl.boundingBox();
-  const endBox = await endEl.boundingBox();
-
-  expect(startBox).toBeTruthy();
-  expect(endBox).toBeTruthy();
-
-  if (startBox && endBox) {
-    await page.mouse.move(startBox.x + startBox.width / 2, startBox.y + startBox.height / 2);
-    await page.mouse.down();
-    await page.mouse.move(endBox.x + endBox.width / 2, endBox.y + endBox.height / 2, { steps: 5 });
-    await page.mouse.up();
-  }
-}
+import { test, expect } from '@playwright/test';
+import { clearAllComments, loadPage, mdSection, dragBetween } from './helpers';
 
 // ============================================================
 // Markdown Drag Selection — File Mode (plan.md, document view by default)
@@ -66,6 +23,7 @@ test.describe('Drag Selection — File Mode', () => {
     await expect(firstGutter).toBeAttached();
     await expect(thirdGutter).toBeAttached();
 
+    await firstGutter.scrollIntoViewIfNeeded();
     await dragBetween(page, firstGutter, thirdGutter);
 
     // Comment form should open with "Lines" in the header (multi-line range)
@@ -86,6 +44,7 @@ test.describe('Drag Selection — File Mode', () => {
     await expect(firstGutter).toBeAttached();
     await expect(thirdGutter).toBeAttached();
 
+    await firstGutter.scrollIntoViewIfNeeded();
     await dragBetween(page, firstGutter, thirdGutter);
 
     // At least one line block should have the selected class
@@ -124,6 +83,7 @@ test.describe('Drag Selection — File Mode', () => {
     await expect(firstGutter).toBeAttached();
     await expect(thirdGutter).toBeAttached();
 
+    await firstGutter.scrollIntoViewIfNeeded();
     await dragBetween(page, firstGutter, thirdGutter);
 
     const form = page.locator('.comment-form');

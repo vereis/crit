@@ -1,9 +1,5 @@
-import { test, expect, type Page } from '@playwright/test';
-
-async function loadPage(page: Page) {
-  await page.goto('/');
-  await expect(page.locator('.loading')).toBeHidden({ timeout: 10_000 });
-}
+import { test, expect } from '@playwright/test';
+import { loadPage } from './helpers';
 
 // ============================================================
 // Share Feature — Git Mode (share button hidden)

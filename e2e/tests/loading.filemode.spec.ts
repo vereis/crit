@@ -1,9 +1,5 @@
-import { test, expect, type Page } from '@playwright/test';
-
-async function loadPage(page: Page) {
-  await page.goto('/');
-  await expect(page.locator('.loading')).toBeHidden({ timeout: 10_000 });
-}
+import { test, expect } from '@playwright/test';
+import { loadPage } from './helpers';
 
 test.describe('File Mode — Page Loading', () => {
   test('page loads without errors, file sections appear', async ({ page }) => {
@@ -60,14 +56,14 @@ test.describe('File Mode — Markdown Rendering', () => {
     await expect(mdSection.locator('h2', { hasText: 'Overview' })).toBeVisible();
   });
 
-  test('markdown blocks have line gutters in DOM (visually hidden)', async ({ page }) => {
+  test('markdown blocks have visible line gutters in DOM', async ({ page }) => {
     await loadPage(page);
     const mdSection = page.locator('.file-section').filter({ hasText: 'plan.md' });
     const gutters = mdSection.locator('.line-gutter');
     const count = await gutters.count();
     expect(count).toBeGreaterThan(0);
-    // Gutters exist but are visually hidden in document view
-    await expect(gutters.first()).not.toBeVisible();
+    // Gutters are visible in document view with line numbers
+    await expect(gutters.first()).toBeVisible();
   });
 });
 

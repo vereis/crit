@@ -567,6 +567,17 @@ func (s *Session) SignalRoundComplete() {
 	}
 }
 
+// ClearAllComments removes all comments from all files and resets comment IDs.
+func (s *Session) ClearAllComments() {
+	s.mu.Lock()
+	for _, f := range s.Files {
+		f.Comments = []Comment{}
+		f.nextID = 1
+	}
+	s.mu.Unlock()
+	s.scheduleWrite()
+}
+
 // RoundCompleteChan returns the channel signaled on round completion.
 func (s *Session) RoundCompleteChan() <-chan struct{} {
 	return s.roundComplete

@@ -1,35 +1,5 @@
-import { test, expect, type Page, type APIRequestContext } from '@playwright/test';
-
-// Helper: clean all comments via API so each test starts fresh.
-async function clearAllComments(request: APIRequestContext) {
-  const sessionRes = await request.get('/api/session');
-  const session = await sessionRes.json();
-  for (const f of (session.files || [])) {
-    const commentsRes = await request.get(`/api/file/comments?path=${encodeURIComponent(f.path)}`);
-    const comments = await commentsRes.json();
-    if (Array.isArray(comments)) {
-      for (const c of comments) {
-        await request.delete(`/api/comment/${c.id}?path=${encodeURIComponent(f.path)}`);
-      }
-    }
-  }
-}
-
-// Helper: navigate and wait for page load
-async function loadPage(page: Page) {
-  await page.goto('/');
-  await expect(page.locator('.loading')).toBeHidden({ timeout: 10_000 });
-}
-
-// Helper: scope selectors to plan.md file section
-function mdSection(page: Page) {
-  return page.locator('.file-section').filter({ hasText: 'plan.md' });
-}
-
-// Helper: click body to ensure no element has focus
-async function clearFocus(page: Page) {
-  await page.locator('body').click({ position: { x: 0, y: 0 } });
-}
+import { test, expect } from '@playwright/test';
+import { clearAllComments, loadPage, mdSection, clearFocus } from './helpers';
 
 // ============================================================
 // j/k Navigation on Markdown Blocks (File Mode — document view by default)
@@ -133,20 +103,20 @@ test.describe('Keyboard Comment Shortcuts — File Mode', () => {
   });
 
   test('e edits comment on focused block', async ({ page, request }) => {
-    // Create a comment on line 1 of plan.md
-    await request.post(`/api/file/comments?path=plan.md`, {
+    // Create a comment on line 1 of handler.js (first file alphabetically, so j lands here)
+    await request.post(`/api/file/comments?path=handler.js`, {
       data: { start_line: 1, end_line: 1, body: 'Filemode edit test' },
     });
 
     await loadPage(page);
-    const section = mdSection(page);
+    const section = page.locator('.file-section').filter({ hasText: 'handler.js' });
     await expect(section.locator('.document-wrapper')).toBeVisible();
     await clearFocus(page);
 
     // Verify comment exists
     await expect(section.locator('.comment-card')).toBeVisible();
 
-    // Navigate to the block covering line 1
+    // Navigate to the first block (handler.js line 1)
     await page.keyboard.press('j');
     const focused = page.locator('.line-block.kb-nav.focused');
     await expect(focused).toHaveCount(1);
@@ -163,20 +133,20 @@ test.describe('Keyboard Comment Shortcuts — File Mode', () => {
   });
 
   test('d deletes comment on focused block', async ({ page, request }) => {
-    // Create a comment on line 1 of plan.md
-    await request.post(`/api/file/comments?path=plan.md`, {
+    // Create a comment on line 1 of handler.js (first file alphabetically)
+    await request.post(`/api/file/comments?path=handler.js`, {
       data: { start_line: 1, end_line: 1, body: 'Filemode delete test' },
     });
 
     await loadPage(page);
-    const section = mdSection(page);
+    const section = page.locator('.file-section').filter({ hasText: 'handler.js' });
     await expect(section.locator('.document-wrapper')).toBeVisible();
     await clearFocus(page);
 
     // Verify comment exists
     await expect(section.locator('.comment-card')).toBeVisible();
 
-    // Navigate to the first block (should cover line 1)
+    // Navigate to the first block (handler.js line 1)
     await page.keyboard.press('j');
     await expect(page.locator('.line-block.kb-nav.focused')).toHaveCount(1);
 

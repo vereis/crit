@@ -1,9 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
-
-async function loadPage(page: Page) {
-  await page.goto('/');
-  await expect(page.locator('.loading')).toBeHidden({ timeout: 10_000 });
-}
+import { loadPage } from './helpers';
 
 async function switchScope(page: Page, scope: string) {
   const responsePromise = page.waitForResponse(resp =>
@@ -11,8 +7,8 @@ async function switchScope(page: Page, scope: string) {
   );
   await page.click(`#scopeToggle .toggle-btn[data-scope="${scope}"]`);
   await responsePromise;
-  // Wait for rendering to complete
-  await page.waitForTimeout(500);
+  // Wait for the clicked button to become active
+  await expect(page.locator(`#scopeToggle .toggle-btn[data-scope="${scope}"]`)).toHaveClass(/active/);
 }
 
 test.afterEach(async ({ page }) => {
@@ -64,8 +60,10 @@ test.describe('Scope Toggle', () => {
     await switchScope(page, 'staged');
     await expect(page.locator('.file-section')).toHaveCount(1);
     await switchScope(page, 'all');
-    const count = await page.locator('.file-section').count();
-    expect(count).toBeGreaterThanOrEqual(5);
+    await expect(async () => {
+      const count = await page.locator('.file-section').count();
+      expect(count).toBeGreaterThanOrEqual(5);
+    }).toPass({ timeout: 5000 });
   });
 
   test('active button styling updates on click', async ({ page }) => {
@@ -144,8 +142,7 @@ test.describe('Scope Toggle', () => {
     await loadPage(page);
     // Click disabled staged button (force: true because Playwright won't click disabled elements)
     await page.click('#scopeToggle .toggle-btn[data-scope="staged"]', { force: true });
-    await page.waitForTimeout(300);
-    // "all" should still be active
+    // "all" should still be active (no state change expected)
     await expect(page.locator('#scopeToggle .toggle-btn[data-scope="all"]')).toHaveClass(/active/);
     await expect(page.locator('#scopeToggle .toggle-btn[data-scope="staged"]')).not.toHaveClass(/active/);
   });

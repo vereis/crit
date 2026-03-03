@@ -10,3 +10,6 @@ crit.exe
 # Dependencies
 node_modules/
 .worktrees/
+
+# Playwright test artifacts
+test-results/

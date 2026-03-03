@@ -1,10 +1,5 @@
 import { test, expect } from '@playwright/test';
-
-// Helper: navigate and wait for page load
-async function loadPage(page: import('@playwright/test').Page) {
-  await page.goto('/');
-  await expect(page.locator('.loading')).toBeHidden({ timeout: 10_000 });
-}
+import { loadPage } from './helpers';
 
 test.describe('Diff Rendering — Split Mode (default)', () => {
   test('shows split diff by default', async ({ page }) => {

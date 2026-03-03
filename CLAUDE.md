@@ -123,14 +123,29 @@ make e2e-report                                       # View HTML report with sc
 | `file-tree.filemode.spec.ts`      | file | File tree panel, clicking, comment badges in file mode              |
 | `round-complete.spec.ts`          | git  | Multi-round API (finish, round-complete), SSE refresh, UI state     |
 | `share.spec.ts`                   | git  | Share button visibility, config API defaults                        |
+| `round-complete.filemode.spec.ts` | file | Multi-round API + frontend in file mode                             |
+| `multifile.multifile.spec.ts`     | multi| Loading, code rendering, comments on Go/Elixir, directory files     |
 
 ### Writing new tests
 
 - **Git-mode tests**: name as `*.spec.ts` — runs against the git fixture on port 3123
 - **File-mode tests**: name as `*.filemode.spec.ts` — runs against the file fixture on port 3124
-- **Comment cleanup**: the server persists comments between tests. Use `clearAllComments(request)` in `beforeEach` to reset state (see `comments.spec.ts` for the pattern)
+- **Multi-file tests**: name as `*.multifile.spec.ts` — runs against the multi-file fixture on port 3127
+- **Comment cleanup**: the server persists comments between tests. Use `clearAllComments(request)` in `beforeEach` to reset state — this calls `DELETE /api/comments` (bulk endpoint)
+- **Shared helpers**: import from `./helpers` — provides `clearAllComments`, `loadPage`, `mdSection`, `goSection`, `jsSection`, `switchToDocumentView`, `dragBetween`, `clearFocus`
 - **Markdown in git mode**: defaults to diff view. Call `switchToDocumentView()` helper to test document rendering
 - **Markdown in file mode**: defaults to document view. No toggle needed
+
+### E2E best practices
+
+- **Never use `waitForTimeout` or `setTimeout`** for waiting on state. Use Playwright auto-retrying assertions (`toPass()`, `toHaveClass()`, `toBeVisible()`, etc.) instead. The only exception is a sleep interval inside a polling loop where you're already retrying.
+- **Never use `.count()` followed by `expect(count).toBe(N)`** — this is a snapshot that doesn't retry. Use `await expect(locator).toHaveCount(N)` or wrap in `toPass()` for range checks.
+- **Always import from `./helpers`** — don't redefine `loadPage`, `mdSection`, etc. locally. If a test needs a fixture-specific helper, define it in that file but use `Page` types, not `any`.
+- **Use `clearAllComments(request)` in `beforeEach`** — the server persists state across tests. Always clean up.
+- **Parallel execution**: projects run in parallel via shell (each in its own `npx playwright test --project=X` process). Tests within a project run sequentially (`workers: 1`) because they share server state. Don't add `workers > 1` to `playwright.config.ts`.
+- **Test naming convention**: `*.spec.ts` (git-mode), `*.filemode.spec.ts` (file-mode + no-git-mode), `*.singlefile.spec.ts` (single-file), `*.multifile.spec.ts` (multi-file). The git-mode regex explicitly excludes all other patterns.
+- **CSS selectors**: check existing tests for the correct class names before writing assertions. The codebase uses specific names like `.tree-comment-badge` (not `.tree-file-comments`).
+- **Scroll before interact**: if an element might be below the viewport (especially in file-mode with multiple files), call `scrollIntoViewIfNeeded()` before hover/click/drag.
 
 ## API Endpoints
 
@@ -143,6 +158,7 @@ Session-scoped:
 - `POST /api/round-complete` — agent signals all edits are done; triggers new round
 - `POST /api/share-url` — persist `{url, delete_token}` to `.crit.json` after upload
 - `DELETE /api/share-url` — unpublish: calls crit-web DELETE and clears local persisted URL
+- `DELETE /api/comments` — bulk delete all comments across all files (used by E2E test cleanup)
 
 File-scoped (use `?path=` query param):
 

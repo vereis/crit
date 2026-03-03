@@ -272,6 +272,37 @@ func TestAPIDeleteComment_NotFound(t *testing.T) {
 	}
 }
 
+func TestClearAllComments(t *testing.T) {
+	s, session := newTestServer(t)
+	session.AddComment("test.md", 1, 1, "", "comment 1")
+	session.AddComment("test.md", 2, 2, "", "comment 2")
+
+	if len(session.GetComments("test.md")) != 2 {
+		t.Fatal("expected 2 comments before clear")
+	}
+
+	req := httptest.NewRequest("DELETE", "/api/comments", nil)
+	w := httptest.NewRecorder()
+	s.ServeHTTP(w, req)
+
+	if w.Code != 200 {
+		t.Fatalf("status = %d", w.Code)
+	}
+	if len(session.GetComments("test.md")) != 0 {
+		t.Error("comments not cleared")
+	}
+}
+
+func TestClearAllComments_MethodNotAllowed(t *testing.T) {
+	s, _ := newTestServer(t)
+	req := httptest.NewRequest("GET", "/api/comments", nil)
+	w := httptest.NewRecorder()
+	s.ServeHTTP(w, req)
+	if w.Code != 405 {
+		t.Errorf("status = %d, want 405", w.Code)
+	}
+}
+
 func TestFinish(t *testing.T) {
 	s, session := newTestServer(t)
 	session.AddComment("test.md", 1, 1, "", "note")

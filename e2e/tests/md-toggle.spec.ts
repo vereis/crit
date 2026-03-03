@@ -1,27 +1,5 @@
-import { test, expect, type Page, type APIRequestContext } from '@playwright/test';
-
-async function clearAllComments(request: APIRequestContext) {
-  const sessionRes = await request.get('/api/session');
-  const session = await sessionRes.json();
-  for (const f of (session.files || [])) {
-    const commentsRes = await request.get(`/api/file/comments?path=${encodeURIComponent(f.path)}`);
-    const comments = await commentsRes.json();
-    if (Array.isArray(comments)) {
-      for (const c of comments) {
-        await request.delete(`/api/comment/${c.id}?path=${encodeURIComponent(f.path)}`);
-      }
-    }
-  }
-}
-
-async function loadPage(page: Page) {
-  await page.goto('/');
-  await expect(page.locator('.loading')).toBeHidden({ timeout: 10_000 });
-}
-
-function mdSection(page: Page) {
-  return page.locator('.file-section').filter({ hasText: 'plan.md' });
-}
+import { test, expect } from '@playwright/test';
+import { clearAllComments, loadPage, mdSection } from './helpers';
 
 // ============================================================
 // Markdown Document/Diff Toggle (git mode only)
@@ -116,17 +94,7 @@ test.describe('Markdown Document/Diff Toggle — Git Mode', () => {
 
   test('comments created in document view are visible after switching to diff and back', async ({ page, request }) => {
     // Clear comments first
-    const sessionRes = await request.get('/api/session');
-    const session = await sessionRes.json();
-    for (const f of session.files || []) {
-      const commentsRes = await request.get(`/api/file/comments?path=${encodeURIComponent(f.path)}`);
-      const comments = await commentsRes.json();
-      if (Array.isArray(comments)) {
-        for (const c of comments) {
-          await request.delete(`/api/comment/${c.id}?path=${encodeURIComponent(f.path)}`);
-        }
-      }
-    }
+    await clearAllComments(request);
 
     await loadPage(page);
     const section = mdSection(page);

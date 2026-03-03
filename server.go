@@ -42,6 +42,8 @@ func NewServer(session *Session, frontendFS embed.FS, shareURL string, currentVe
 	mux.HandleFunc("/api/events", s.handleEvents)
 	mux.HandleFunc("/api/round-complete", s.handleRoundComplete)
 
+	mux.HandleFunc("/api/comments", s.handleClearComments)
+
 	// File-scoped endpoints (use ?path= query param)
 	mux.HandleFunc("/api/file", s.handleFile)
 	mux.HandleFunc("/api/file/diff", s.handleFileDiff)
@@ -272,6 +274,15 @@ func (s *Server) handleCommentByID(w http.ResponseWriter, r *http.Request) {
 	default:
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 	}
+}
+
+func (s *Server) handleClearComments(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodDelete {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	s.session.ClearAllComments()
+	writeJSON(w, map[string]string{"status": "ok"})
 }
 
 func (s *Server) handleRoundComplete(w http.ResponseWriter, r *http.Request) {

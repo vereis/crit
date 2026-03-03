@@ -1,26 +1,5 @@
-import { test, expect, type Page, type APIRequestContext } from '@playwright/test';
-
-// Helper: clean all comments via API so each test starts fresh.
-async function clearAllComments(request: APIRequestContext) {
-  const sessionRes = await request.get('/api/session');
-  const session = await sessionRes.json();
-  const files = session.files || [];
-
-  for (const f of files) {
-    const commentsRes = await request.get(`/api/file/comments?path=${encodeURIComponent(f.path)}`);
-    const comments = await commentsRes.json();
-    if (Array.isArray(comments)) {
-      for (const c of comments) {
-        await request.delete(`/api/comment/${c.id}?path=${encodeURIComponent(f.path)}`);
-      }
-    }
-  }
-}
-
-async function loadPage(page: Page) {
-  await page.goto('/');
-  await expect(page.locator('.loading')).toBeHidden({ timeout: 10_000 });
-}
+import { test, expect, type Page } from '@playwright/test';
+import { clearAllComments, loadPage } from './helpers';
 
 function serverSection(page: Page) {
   return page.locator('#file-section-server\\.go');

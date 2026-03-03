@@ -1,27 +1,6 @@
-import { test, expect, type Page, type APIRequestContext } from '@playwright/test';
+import { test, expect, type APIRequestContext } from '@playwright/test';
 import * as fs from 'fs';
-
-async function loadPage(page: Page) {
-  await page.goto('/');
-  await expect(page.locator('.loading')).toBeHidden({ timeout: 10_000 });
-}
-
-async function clearAllComments(request: APIRequestContext) {
-  const sessionRes = await request.get('/api/session');
-  const session = await sessionRes.json();
-  for (const f of session.files || []) {
-    const commentsRes = await request.get(`/api/file/comments?path=${encodeURIComponent(f.path)}`);
-    const comments = await commentsRes.json();
-    if (Array.isArray(comments)) {
-      for (const c of comments) {
-        await request.delete(`/api/comment/${c.id}?path=${encodeURIComponent(f.path)}`);
-      }
-    }
-  }
-  // Wait for debounced .crit.json write (200ms) to flush empty state to disk.
-  // Without this, a subsequent round-complete may read stale comments from .crit.json.
-  await new Promise(r => setTimeout(r, 300));
-}
+import { clearAllComments, loadPage } from './helpers';
 
 // Find a non-crit.json file path from the session (e.g., plan.md or handler.js)
 async function getTestFilePath(request: APIRequestContext): Promise<string> {
@@ -29,6 +8,14 @@ async function getTestFilePath(request: APIRequestContext): Promise<string> {
   const session = await sessionRes.json();
   const file = session.files.find((f: any) => f.path !== '.crit.json' && f.status !== 'deleted');
   return file?.path || session.files[0].path;
+}
+
+// Poll session API until the review round increments past `previousRound`.
+async function waitForRound(request: APIRequestContext, previousRound: number) {
+  await expect(async () => {
+    const session = await request.get('/api/session').then(r => r.json());
+    expect(session.review_round).toBeGreaterThan(previousRound);
+  }).toPass({ timeout: 5000 });
 }
 
 // ============================================================
@@ -83,8 +70,8 @@ test.describe('Multi-Round — API', () => {
     const data = await res.json();
     expect(data.status).toBe('ok');
 
-    // Allow a moment for async processing
-    await new Promise(r => setTimeout(r, 500));
+    // Wait for round to increment
+    await waitForRound(request, startRound);
 
     // Verify round incremented
     session = await request.get('/api/session').then(r => r.json());
@@ -102,9 +89,10 @@ test.describe('Multi-Round — API', () => {
     // Finish to write .crit.json
     await request.post('/api/finish');
 
-    // Signal round complete
+    // Signal round complete and wait for processing
+    const round1 = (await request.get('/api/session').then(r => r.json())).review_round;
     await request.post('/api/round-complete');
-    await new Promise(r => setTimeout(r, 500));
+    await waitForRound(request, round1);
 
     // Unresolved comment should be carried forward
     const comments = await request.get(`/api/file/comments?path=${encodeURIComponent(filePath)}`).then(r => r.json());
@@ -136,9 +124,10 @@ test.describe('Multi-Round — API', () => {
     }
     fs.writeFileSync(critJsonPath, JSON.stringify(critJson, null, 2));
 
-    // Signal round complete
+    // Signal round complete and wait for processing
+    const round2 = (await request.get('/api/session').then(r => r.json())).review_round;
     await request.post('/api/round-complete');
-    await new Promise(r => setTimeout(r, 500));
+    await waitForRound(request, round2);
 
     // Resolved comment should be carried forward with resolved fields preserved
     const comments = await request.get(`/api/file/comments?path=${encodeURIComponent(filePath)}`).then(r => r.json());
@@ -154,7 +143,7 @@ test.describe('Multi-Round — API', () => {
     const filesBefore = before.files.map((f: any) => f.path).filter((p: string) => p !== '.crit.json').sort();
 
     await request.post('/api/round-complete');
-    await new Promise(r => setTimeout(r, 500));
+    await waitForRound(request, before.review_round);
 
     const after = await request.get('/api/session').then(r => r.json());
     const filesAfter = after.files.map((f: any) => f.path).filter((p: string) => p !== '.crit.json').sort();

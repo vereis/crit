@@ -1,26 +1,7 @@
-import { test, expect, type Page, type APIRequestContext } from '@playwright/test';
+import { test, expect, type APIRequestContext } from '@playwright/test';
 import * as fs from 'fs';
 import * as path from 'path';
-
-async function loadPage(page: Page) {
-  await page.goto('/');
-  await expect(page.locator('.loading')).toBeHidden({ timeout: 10_000 });
-}
-
-async function clearAllComments(request: APIRequestContext) {
-  const sessionRes = await request.get('/api/session');
-  const session = await sessionRes.json();
-  for (const f of session.files || []) {
-    const commentsRes = await request.get(`/api/file/comments?path=${encodeURIComponent(f.path)}`);
-    const comments = await commentsRes.json();
-    if (Array.isArray(comments)) {
-      for (const c of comments) {
-        await request.delete(`/api/comment/${c.id}?path=${encodeURIComponent(f.path)}`);
-      }
-    }
-  }
-  await new Promise(r => setTimeout(r, 300));
-}
+import { clearAllComments, loadPage, mdSection } from './helpers';
 
 /** Get the fixture directory from the .crit.json path returned by /api/finish. */
 async function getFixtureDir(request: APIRequestContext): Promise<string> {
@@ -47,39 +28,35 @@ async function triggerRoundWithModifiedPlan(request: APIRequestContext) {
   const res = await request.post('/api/round-complete');
   expect(res.ok()).toBeTruthy();
 
-  // Wait for async round-complete processing (watcher goroutine)
-  // and verify diff data is available
-  for (let i = 0; i < 10; i++) {
-    await new Promise(r => setTimeout(r, 300));
+  // Poll until diff data is available after round-complete processing
+  await expect(async () => {
     const diffRes = await request.get('/api/file/diff?path=plan.md');
     const diff = await diffRes.json();
-    if (diff.previous_content && diff.hunks && diff.hunks.length > 0) {
-      return; // Diff is ready
-    }
-  }
-  throw new Error('Timed out waiting for diff data after round-complete');
-}
-
-function mdSection(page: Page) {
-  return page.locator('.file-section').filter({ hasText: 'plan.md' });
+    expect(diff.previous_content).toBeTruthy();
+    expect(diff.hunks?.length).toBeGreaterThan(0);
+  }).toPass({ timeout: 5000 });
 }
 
 // ============================================================
 // Rendered Diff — File Mode — Toggle Diff button
 // ============================================================
 test.describe('Rendered Diff — File Mode — Toggle Button', () => {
-  test('Toggle Diff button is hidden before any round-complete', async ({ page }) => {
+  test('Toggle Diff button visibility depends on whether diffs exist', async ({ page, request }) => {
+    // Check if server already has round-complete state from previous tests
+    const sessionRes = await request.get('/api/session');
+    const session = await sessionRes.json();
+
     await loadPage(page);
     const btn = page.locator('#diffToggle');
-    await expect(btn).toBeHidden();
-  });
 
-  test('Toggle Diff button appears after round-complete with file changes', async ({ page, request }) => {
+    if (session.review_round <= 1) {
+      // Fresh server — no round-complete yet, button should be hidden
+      await expect(btn).toBeHidden();
+    }
+    // After triggering round-complete with changes, button should appear
     await clearAllComments(request);
     await triggerRoundWithModifiedPlan(request);
-
     await loadPage(page);
-    const btn = page.locator('#diffToggle');
     await expect(btn).toBeVisible();
   });
 

@@ -1,29 +1,5 @@
-import { test, expect, type Page } from '@playwright/test';
-
-// Helper: navigate and wait for page load
-async function loadPage(page: Page) {
-  await page.goto('/');
-  await expect(page.locator('.loading')).toBeHidden({ timeout: 10_000 });
-}
-
-// Helper: scope all selectors to the plan.md file section
-function mdSection(page: Page) {
-  return page.locator('.file-section').filter({ hasText: 'plan.md' });
-}
-
-// Helper: switch plan.md to document view (in git mode, markdown files default to diff view)
-async function switchToDocumentView(page: Page) {
-  const section = mdSection(page);
-  await expect(section).toBeVisible();
-
-  // Click the "Document" toggle button within the plan.md section header
-  const docBtn = section.locator('.file-header-toggle .toggle-btn[data-mode="document"]');
-  await expect(docBtn).toBeVisible();
-  await docBtn.click();
-
-  // Wait for the document wrapper to appear (indicates document view is rendered)
-  await expect(section.locator('.document-wrapper')).toBeVisible();
-}
+import { test, expect } from '@playwright/test';
+import { loadPage, mdSection, switchToDocumentView } from './helpers';
 
 test.describe('Markdown Rendering — plan.md', () => {
   test.beforeEach(async ({ page }) => {
@@ -135,7 +111,7 @@ test.describe('Markdown Rendering — plan.md', () => {
     await expect(section.locator('blockquote', { hasText: 'rate-limit' })).toBeVisible();
   });
 
-  test('line gutters exist in DOM but line numbers are visually hidden', async ({ page }) => {
+  test('line gutters exist in DOM with visible line numbers', async ({ page }) => {
     const section = mdSection(page);
 
     // Line gutters exist in the DOM (needed for comment interaction)
@@ -143,13 +119,13 @@ test.describe('Markdown Rendering — plan.md', () => {
     const gutterCount = await lineGutters.count();
     expect(gutterCount).toBeGreaterThan(0);
 
-    // Line numbers are present but visually hidden in document view
+    // Line numbers are present and visible in document view
     const lineNums = section.locator('.line-gutter .line-num');
     const numCount = await lineNums.count();
     expect(numCount).toBeGreaterThan(0);
-    await expect(lineNums.first()).not.toBeVisible();
+    await expect(lineNums.first()).toBeVisible();
 
-    // Line numbers still carry valid data attributes for commenting
+    // Line numbers carry valid data attributes for commenting
     const firstLineNumText = await lineNums.first().textContent();
     const firstNum = parseInt(firstLineNumText?.trim() || '0', 10);
     expect(firstNum).toBeGreaterThan(0);

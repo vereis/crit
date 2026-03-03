@@ -1,17 +1,5 @@
-import { test, expect, type Page } from '@playwright/test';
-
-async function loadPage(page: Page) {
-  await page.goto('/');
-  await expect(page.locator('.loading')).toBeHidden({ timeout: 10_000 });
-}
-
-function goSection(page: Page) {
-  return page.locator('#file-section-server\\.go');
-}
-
-function jsSection(page: Page) {
-  return page.locator('#file-section-handler\\.js');
-}
+import { test, expect } from '@playwright/test';
+import { loadPage, goSection, jsSection } from './helpers';
 
 // ============================================================
 // Syntax Highlighting in Diff Views

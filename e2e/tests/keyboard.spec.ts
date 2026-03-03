@@ -1,50 +1,5 @@
-import { test, expect, type Page, type APIRequestContext } from '@playwright/test';
-
-// Helper: clean all comments via API so each test starts fresh.
-async function clearAllComments(request: APIRequestContext) {
-  const sessionRes = await request.get('/api/session');
-  const session = await sessionRes.json();
-  for (const f of (session.files || [])) {
-    const commentsRes = await request.get(`/api/file/comments?path=${encodeURIComponent(f.path)}`);
-    const comments = await commentsRes.json();
-    if (Array.isArray(comments)) {
-      for (const c of comments) {
-        await request.delete(`/api/comment/${c.id}?path=${encodeURIComponent(f.path)}`);
-      }
-    }
-  }
-}
-
-// Helper: navigate and wait for page load
-async function loadPage(page: Page) {
-  await page.goto('/');
-  await expect(page.locator('.loading')).toBeHidden({ timeout: 10_000 });
-}
-
-// Helper: scope selectors to plan.md file section
-function mdSection(page: Page) {
-  return page.locator('.file-section').filter({ hasText: 'plan.md' });
-}
-
-// Helper: switch plan.md to document view (markdown defaults to diff in git mode)
-async function switchToDocumentView(page: Page) {
-  const section = mdSection(page);
-  await expect(section).toBeVisible();
-  const docBtn = section.locator('.file-header-toggle .toggle-btn[data-mode="document"]');
-  await expect(docBtn).toBeVisible();
-  await docBtn.click();
-  await expect(section.locator('.document-wrapper')).toBeVisible();
-}
-
-// Helper: scope selectors to server.go file section
-function goSection(page: Page) {
-  return page.locator('#file-section-server\\.go');
-}
-
-// Helper: click body to ensure no element has focus (reset keyboard state)
-async function clearFocus(page: Page) {
-  await page.locator('body').click({ position: { x: 0, y: 0 } });
-}
+import { test, expect } from '@playwright/test';
+import { clearAllComments, loadPage, mdSection, goSection, clearFocus, switchToDocumentView } from './helpers';
 
 // ============================================================
 // j/k Navigation on Diff Blocks (Split Mode)

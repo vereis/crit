@@ -1,40 +1,5 @@
-import { test, expect, type Page, type APIRequestContext } from '@playwright/test';
-
-async function clearAllComments(request: APIRequestContext) {
-  const sessionRes = await request.get('/api/session');
-  const session = await sessionRes.json();
-  for (const f of session.files || []) {
-    const res = await request.get(`/api/file/comments?path=${encodeURIComponent(f.path)}`);
-    const comments = await res.json();
-    if (Array.isArray(comments)) {
-      for (const c of comments) {
-        await request.delete(`/api/comment/${c.id}?path=${encodeURIComponent(f.path)}`);
-      }
-    }
-  }
-}
-
-async function loadPage(page: Page) {
-  await page.goto('/');
-  await expect(page.locator('.loading')).toBeHidden({ timeout: 10_000 });
-}
-
-function mdSection(page: Page) {
-  return page.locator('.file-section').filter({ hasText: 'plan.md' });
-}
-
-async function switchToDocumentView(page: Page) {
-  const section = mdSection(page);
-  await expect(section).toBeVisible();
-  const docBtn = section.locator('.file-header-toggle .toggle-btn[data-mode="document"]');
-  await expect(docBtn).toBeVisible();
-  await docBtn.click();
-  await expect(section.locator('.document-wrapper')).toBeVisible();
-}
-
-function goSection(page: Page) {
-  return page.locator('#file-section-server\\.go');
-}
+import { test, expect } from '@playwright/test';
+import { clearAllComments, loadPage, mdSection, goSection, switchToDocumentView } from './helpers';
 
 // ============================================================
 // Document View — Comment Range Highlighting

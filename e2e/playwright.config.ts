@@ -4,6 +4,7 @@ const GIT_PORT = process.env.CRIT_TEST_PORT || '3123';
 const FILE_PORT = process.env.CRIT_TEST_FILE_PORT || '3124';
 const SINGLE_PORT = process.env.CRIT_TEST_SINGLE_PORT || '3125';
 const NOGIT_PORT = process.env.CRIT_TEST_NOGIT_PORT || '3126';
+const MULTI_PORT = process.env.CRIT_TEST_MULTI_PORT || '3127';
 const debug = !!process.env.E2E_DEBUG;
 
 export default defineConfig({
@@ -22,7 +23,7 @@ export default defineConfig({
   projects: [
     {
       name: 'git-mode',
-      testMatch: /^(?!.*\.(filemode|singlefile)\.).*\.spec\.ts$/,
+      testMatch: /^(?!.*\.(filemode|singlefile|multifile)\.).*\.spec\.ts$/,
       use: {
         browserName: 'chromium',
         baseURL: `http://localhost:${GIT_PORT}`,
@@ -45,11 +46,22 @@ export default defineConfig({
       },
     },
     {
+      // Runs the same filemode tests against a fixture with NO git repo.
+      // This verifies file-mode behavior is identical whether or not
+      // the user happens to be inside a git repository.
       name: 'no-git-mode',
       testMatch: /\.filemode\.spec\.ts$/,
       use: {
         browserName: 'chromium',
         baseURL: `http://localhost:${NOGIT_PORT}`,
+      },
+    },
+    {
+      name: 'multi-file-mode',
+      testMatch: /\.multifile\.spec\.ts$/,
+      use: {
+        browserName: 'chromium',
+        baseURL: `http://localhost:${MULTI_PORT}`,
       },
     },
   ],
@@ -79,6 +91,13 @@ export default defineConfig({
     {
       command: `bash setup-fixtures-nogit.sh ${NOGIT_PORT}`,
       url: `http://localhost:${NOGIT_PORT}/api/session`,
+      reuseExistingServer: true,
+      timeout: 30_000,
+      stdout: 'pipe',
+    },
+    {
+      command: `bash setup-fixtures-multifile.sh ${MULTI_PORT}`,
+      url: `http://localhost:${MULTI_PORT}/api/session`,
       reuseExistingServer: true,
       timeout: 30_000,
       stdout: 'pipe',

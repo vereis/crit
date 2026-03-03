@@ -33,7 +33,10 @@ clean:
 e2e:
 	cd e2e && bash run.sh
 
+e2e-failed:
+	cd e2e && npx playwright test --last-failed
+
 e2e-report:
 	cd e2e && npx playwright show-report
 
-.PHONY: build build-all update-deps test setup-hooks clean test-diff e2e e2e-report
+.PHONY: build build-all update-deps test setup-hooks clean test-diff e2e e2e-failed e2e-report

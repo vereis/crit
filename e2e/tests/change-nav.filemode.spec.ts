@@ -1,26 +1,7 @@
 import { test, expect, type Page, type APIRequestContext } from '@playwright/test';
 import * as fs from 'fs';
 import * as path from 'path';
-
-async function loadPage(page: Page) {
-  await page.goto('/');
-  await expect(page.locator('.loading')).toBeHidden({ timeout: 10_000 });
-}
-
-async function clearAllComments(request: APIRequestContext) {
-  const sessionRes = await request.get('/api/session');
-  const session = await sessionRes.json();
-  for (const f of session.files || []) {
-    const commentsRes = await request.get(`/api/file/comments?path=${encodeURIComponent(f.path)}`);
-    const comments = await commentsRes.json();
-    if (Array.isArray(comments)) {
-      for (const c of comments) {
-        await request.delete(`/api/comment/${c.id}?path=${encodeURIComponent(f.path)}`);
-      }
-    }
-  }
-  await new Promise(r => setTimeout(r, 300));
-}
+import { clearAllComments, loadPage, mdSection } from './helpers';
 
 // Get the fixture directory path from .crit.json location
 async function getFixtureDir(request: APIRequestContext): Promise<string> {
@@ -54,10 +35,6 @@ async function doRoundWithEdit(
 
   // Wait for UI to refresh
   await expect(page.locator('#waitingOverlay')).not.toHaveClass(/active/, { timeout: 5_000 });
-}
-
-function mdSection(page: Page) {
-  return page.locator('.file-section').filter({ hasText: 'plan.md' });
 }
 
 // Generate a unique modification of the original content.

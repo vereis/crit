@@ -1,39 +1,5 @@
-import { test, expect, type Page, type APIRequestContext } from '@playwright/test';
-
-async function clearAllComments(request: APIRequestContext) {
-  const sessionRes = await request.get('/api/session');
-  const session = await sessionRes.json();
-  const files = session.files || [];
-
-  for (const f of files) {
-    const commentsRes = await request.get(`/api/file/comments?path=${encodeURIComponent(f.path)}`);
-    const comments = await commentsRes.json();
-    if (Array.isArray(comments)) {
-      for (const c of comments) {
-        await request.delete(`/api/comment/${c.id}?path=${encodeURIComponent(f.path)}`);
-      }
-    }
-  }
-}
-
-async function loadPage(page: Page) {
-  await page.goto('/');
-  await expect(page.locator('.loading')).toBeHidden({ timeout: 10_000 });
-}
-
-function mdSection(page: Page) {
-  return page.locator('.file-section').filter({ hasText: 'plan.md' });
-}
-
-// Switch plan.md to document view (defaults to diff in git mode)
-async function switchToDocumentView(page: Page) {
-  const section = mdSection(page);
-  await expect(section).toBeVisible();
-  const docBtn = section.locator('.file-header-toggle .toggle-btn[data-mode="document"]');
-  await expect(docBtn).toBeVisible();
-  await docBtn.click();
-  await expect(section.locator('.document-wrapper')).toBeVisible();
-}
+import { test, expect } from '@playwright/test';
+import { clearAllComments, loadPage, mdSection, switchToDocumentView } from './helpers';
 
 test.describe('Draft Autosave', () => {
   test.beforeEach(async ({ page, request }) => {
@@ -58,8 +24,13 @@ test.describe('Draft Autosave', () => {
     const textarea = page.locator('.comment-form textarea');
     await textarea.fill('Draft comment text');
 
-    // Wait for debounced save (500ms + buffer)
-    await page.waitForTimeout(700);
+    // Poll for debounced save to localStorage
+    await expect(async () => {
+      const keys = await page.evaluate(() =>
+        Object.keys(localStorage).filter(k => k.startsWith('crit-draft-'))
+      );
+      expect(keys.length).toBeGreaterThan(0);
+    }).toPass({ timeout: 3000 });
 
     // Check localStorage
     const draft = await page.evaluate(() => {
@@ -87,8 +58,13 @@ test.describe('Draft Autosave', () => {
     const textarea = page.locator('.comment-form textarea');
     await textarea.fill('Saved draft for reload');
 
-    // Wait for debounced save
-    await page.waitForTimeout(700);
+    // Poll for debounced save to localStorage
+    await expect(async () => {
+      const keys = await page.evaluate(() =>
+        Object.keys(localStorage).filter(k => k.startsWith('crit-draft-'))
+      );
+      expect(keys.length).toBeGreaterThan(0);
+    }).toPass({ timeout: 3000 });
 
     // Reload the page
     await page.reload();
@@ -116,8 +92,13 @@ test.describe('Draft Autosave', () => {
     const textarea = page.locator('.comment-form textarea');
     await textarea.fill('Will be submitted');
 
-    // Wait for draft to save
-    await page.waitForTimeout(700);
+    // Poll for draft to save
+    await expect(async () => {
+      const keys = await page.evaluate(() =>
+        Object.keys(localStorage).filter(k => k.startsWith('crit-draft-'))
+      );
+      expect(keys.length).toBeGreaterThan(0);
+    }).toPass({ timeout: 3000 });
 
     // Verify draft exists
     let draftCount = await page.evaluate(() => {
@@ -147,7 +128,13 @@ test.describe('Draft Autosave', () => {
 
     const textarea = page.locator('.comment-form textarea');
     await textarea.fill('Will be cancelled');
-    await page.waitForTimeout(700);
+    // Poll for debounced save to localStorage
+    await expect(async () => {
+      const keys = await page.evaluate(() =>
+        Object.keys(localStorage).filter(k => k.startsWith('crit-draft-'))
+      );
+      expect(keys.length).toBeGreaterThan(0);
+    }).toPass({ timeout: 3000 });
 
     // Cancel the form
     await page.locator('.comment-form .btn-sm:not(.btn-primary)').filter({ hasText: 'Cancel' }).click();
@@ -170,7 +157,13 @@ test.describe('Draft Autosave', () => {
 
     const textarea = page.locator('.comment-form textarea');
     await textarea.fill('Will be escaped');
-    await page.waitForTimeout(700);
+    // Poll for debounced save to localStorage
+    await expect(async () => {
+      const keys = await page.evaluate(() =>
+        Object.keys(localStorage).filter(k => k.startsWith('crit-draft-'))
+      );
+      expect(keys.length).toBeGreaterThan(0);
+    }).toPass({ timeout: 3000 });
 
     // Press Escape
     await textarea.press('Escape');
