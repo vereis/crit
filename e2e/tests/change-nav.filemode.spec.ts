@@ -185,7 +185,7 @@ test.describe('Change Navigation — File Mode', () => {
     await expect(flashed.first()).toBeVisible();
   });
 
-  test('n wraps around after last change', async ({ page, request }) => {
+  test('n wraps to first change when scrolled past all changes', async ({ page, request }) => {
     await loadPage(page);
 
     const modified = makeModified(originalContent);
@@ -194,13 +194,12 @@ test.describe('Change Navigation — File Mode', () => {
     const section = mdSection(page);
     await expect(section.locator('.document-wrapper')).toBeVisible();
 
-    const changeCount = await section.locator('.line-block-changed').count();
-    // Press n more times than there are changes — should wrap
-    for (let i = 0; i <= changeCount; i++) {
-      await page.keyboard.press('n');
-    }
+    // Scroll to the very bottom so all changes are above viewport
+    await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
 
-    // Should still have a flashed element (wrapped around)
+    await page.keyboard.press('n');
+
+    // Should wrap to the first change
     const flashed = section.locator('.line-block.change-flash');
     await expect(flashed.first()).toBeVisible();
   });
@@ -237,6 +236,119 @@ test.describe('Change Navigation — File Mode', () => {
 
     const flashed = section.locator('.line-block.change-flash');
     await expect(flashed.first()).toBeVisible();
+  });
+
+  test('n then n moves forward through two change groups', async ({ page, request }) => {
+    await loadPage(page);
+
+    // Use multi-area changes so there are 2 separated change groups
+    const modified = makeModified(originalContent, 'multi');
+    await doRoundWithEdit(page, request, fixtureDir, 'plan.md', modified);
+
+    const section = mdSection(page);
+    await expect(section.locator('.document-wrapper')).toBeVisible();
+
+    // Scroll to top so both changes are below
+    await page.evaluate(() => window.scrollTo(0, 0));
+
+    // Press n — should go to first change
+    await page.keyboard.press('n');
+    const firstFlashed = section.locator('.line-block.change-flash').first();
+    await expect(firstFlashed).toBeVisible();
+    // Record document-level Y of the first flashed element
+    const firstAbsY = await firstFlashed.evaluate(el => el.getBoundingClientRect().top + window.scrollY);
+
+    // Press n again — should go to second change (further down the document)
+    await page.keyboard.press('n');
+    const secondFlashed = section.locator('.line-block.change-flash').first();
+    await expect(secondFlashed).toBeVisible();
+    const secondAbsY = await secondFlashed.evaluate(el => el.getBoundingClientRect().top + window.scrollY);
+
+    expect(secondAbsY).toBeGreaterThan(firstAbsY);
+  });
+
+  test('n does not go backwards when user scrolls past a change', async ({ page, request }) => {
+    await loadPage(page);
+
+    const modified = makeModified(originalContent, 'multi');
+    await doRoundWithEdit(page, request, fixtureDir, 'plan.md', modified);
+
+    const section = mdSection(page);
+    await expect(section.locator('.document-wrapper')).toBeVisible();
+
+    // Navigate to first change from top
+    await page.evaluate(() => window.scrollTo(0, 0));
+    await page.keyboard.press('n');
+    await expect(section.locator('.line-block.change-flash').first()).toBeVisible();
+
+    // Get document-level Y of the first change group
+    const firstChangeAbsY = await section.locator('.line-block-changed').first().evaluate(
+      el => el.getBoundingClientRect().top + window.scrollY
+    );
+
+    // Manually scroll well past the first change
+    await page.evaluate((y) => window.scrollTo(0, y + 300), firstChangeAbsY);
+
+    // Press n — should go forward to next change, not back to first
+    await page.keyboard.press('n');
+    const flashed = section.locator('.line-block.change-flash').first();
+    await expect(flashed).toBeVisible();
+
+    // The flashed element should be below the first change in the document
+    const flashedAbsY = await flashed.evaluate(el => el.getBoundingClientRect().top + window.scrollY);
+    expect(flashedAbsY).toBeGreaterThan(firstChangeAbsY);
+  });
+
+  test('N goes backward after n navigated forward', async ({ page, request }) => {
+    await loadPage(page);
+
+    const modified = makeModified(originalContent, 'multi');
+    await doRoundWithEdit(page, request, fixtureDir, 'plan.md', modified);
+
+    const section = mdSection(page);
+    await expect(section.locator('.document-wrapper')).toBeVisible();
+
+    // Navigate forward twice to reach the second change
+    await page.evaluate(() => window.scrollTo(0, 0));
+    await page.keyboard.press('n');
+    await expect(section.locator('.line-block.change-flash').first()).toBeVisible();
+    const firstAbsY = await section.locator('.line-block.change-flash').first().evaluate(
+      el => el.getBoundingClientRect().top + window.scrollY
+    );
+
+    await page.keyboard.press('n');
+    await expect(section.locator('.line-block.change-flash').first()).toBeVisible();
+    const secondAbsY = await section.locator('.line-block.change-flash').first().evaluate(
+      el => el.getBoundingClientRect().top + window.scrollY
+    );
+    // Verify we actually moved forward
+    expect(secondAbsY).toBeGreaterThan(firstAbsY);
+
+    // Now press N — should go back to the first change
+    await page.keyboard.press('Shift+N');
+    const backFlashed = section.locator('.line-block.change-flash').first();
+    await expect(backFlashed).toBeVisible();
+    const backAbsY = await backFlashed.evaluate(el => el.getBoundingClientRect().top + window.scrollY);
+    expect(backAbsY).toBeLessThan(secondAbsY);
+  });
+
+  test('N wraps to last change when scrolled above all changes', async ({ page, request }) => {
+    await loadPage(page);
+
+    const modified = makeModified(originalContent, 'multi');
+    await doRoundWithEdit(page, request, fixtureDir, 'plan.md', modified);
+
+    const section = mdSection(page);
+    await expect(section.locator('.document-wrapper')).toBeVisible();
+
+    // Scroll to the very top
+    await page.evaluate(() => window.scrollTo(0, 0));
+
+    // Press N — no change above viewport center, should wrap to last
+    await page.keyboard.press('Shift+N');
+
+    const flashed = section.locator('.line-block.change-flash').first();
+    await expect(flashed).toBeVisible();
   });
 
   test('n/N shortcuts are listed in keyboard shortcuts overlay', async ({ page }) => {

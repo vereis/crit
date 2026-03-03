@@ -1128,13 +1128,49 @@
     if (changeGroups.length === 0) return;
     // Remove previous flash
     document.querySelectorAll('.change-flash').forEach(function(el) { el.classList.remove('change-flash'); });
-    if (dir > 0) {
-      currentChangeIdx = (currentChangeIdx + 1) % changeGroups.length;
-    } else {
-      currentChangeIdx = (currentChangeIdx - 1 + changeGroups.length) % changeGroups.length;
+
+    var viewCenter = window.innerHeight / 2;
+    var threshold = 50;
+    var targetIdx = -1;
+
+    // Check if the previously navigated change is still near viewport center
+    // (i.e. user hasn't scrolled away manually)
+    var currentIsCentered = false;
+    if (currentChangeIdx >= 0 && currentChangeIdx < changeGroups.length) {
+      var curRect = changeGroups[currentChangeIdx].elements[0].getBoundingClientRect();
+      var curCenter = (curRect.top + curRect.bottom) / 2;
+      currentIsCentered = Math.abs(curCenter - viewCenter) < threshold * 3;
     }
+
+    if (currentIsCentered) {
+      // User hasn't scrolled away — use index-based next/prev with wrapping
+      if (dir > 0) {
+        targetIdx = (currentChangeIdx + 1) % changeGroups.length;
+      } else {
+        targetIdx = (currentChangeIdx - 1 + changeGroups.length) % changeGroups.length;
+      }
+    } else {
+      // User scrolled manually — find next/prev relative to viewport position
+      if (dir > 0) {
+        for (var i = 0; i < changeGroups.length; i++) {
+          var rect = changeGroups[i].elements[0].getBoundingClientRect();
+          var elCenter = (rect.top + rect.bottom) / 2;
+          if (elCenter > viewCenter + threshold) { targetIdx = i; break; }
+        }
+        if (targetIdx === -1) targetIdx = 0;
+      } else {
+        for (var i = changeGroups.length - 1; i >= 0; i--) {
+          var rect = changeGroups[i].elements[0].getBoundingClientRect();
+          var elCenter = (rect.top + rect.bottom) / 2;
+          if (elCenter < viewCenter - threshold) { targetIdx = i; break; }
+        }
+        if (targetIdx === -1) targetIdx = changeGroups.length - 1;
+      }
+    }
+
+    currentChangeIdx = targetIdx;
     var group = changeGroups[currentChangeIdx];
-    group.elements[0].scrollIntoView({ block: 'center', behavior: 'smooth' });
+    group.elements[0].scrollIntoView({ block: 'center', behavior: 'instant' });
     group.elements.forEach(function(el) { el.classList.add('change-flash'); });
     focusedElement = group.elements[0];
     focusedFilePath = group.filePath;
