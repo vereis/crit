@@ -294,4 +294,4 @@ if [ -z "${CRIT_BIN:-}" ]; then
 fi
 
 # Run crit in the fixture repo
-exec "$CRIT_BIN" --no-open --port "$PORT"
+exec "$CRIT_BIN" --no-open --quiet --port "$PORT"

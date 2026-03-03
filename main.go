@@ -5,6 +5,7 @@ import (
 	"embed"
 	"flag"
 	"fmt"
+	"io"
 	"log"
 	"net"
 	"net/http"
@@ -87,6 +88,8 @@ func main() {
 	showVersion := flag.Bool("version", false, "Print version and exit")
 	flag.BoolVar(showVersion, "v", false, "Print version and exit (shorthand)")
 	shareURL := flag.String("share-url", "", "Base URL of hosted Crit service for sharing reviews (overrides CRIT_SHARE_URL env var)")
+	quiet := flag.Bool("quiet", false, "Suppress status output")
+	flag.BoolVar(quiet, "q", false, "Suppress status output (shorthand)")
 	flag.Usage = func() {
 		printHelp()
 	}
@@ -147,7 +150,11 @@ func main() {
 		// No WriteTimeout — SSE connections need to stay open
 	}
 
-	status := newStatus(os.Stdout)
+	var statusWriter io.Writer = os.Stdout
+	if *quiet {
+		statusWriter = io.Discard
+	}
+	status := newStatus(statusWriter)
 	srv.status = status
 	session.status = status
 
@@ -198,6 +205,7 @@ Agents:
 Options:
   -p, --port <port>           Port to listen on (default: random)
       --no-open               Don't auto-open browser
+  -q, --quiet                 Suppress status output
       --share-url <url>       Share service URL (default: https://crit.live)
   -v, --version               Print version
 

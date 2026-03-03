@@ -153,4 +153,4 @@ if [ -z "${CRIT_BIN:-}" ]; then
 fi
 
 # Run crit in file mode with explicit files AND a directory
-exec "$CRIT_BIN" --no-open --port "$PORT" plan.md main.go handler.ex lib/
+exec "$CRIT_BIN" --no-open --quiet --port "$PORT" plan.md main.go handler.ex lib/

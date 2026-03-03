@@ -81,4 +81,4 @@ if [ -z "${CRIT_BIN:-}" ]; then
 fi
 
 # Run crit in single-file mode
-exec "$CRIT_BIN" --no-open --port "$PORT" plan.md
+exec "$CRIT_BIN" --no-open --quiet --port "$PORT" plan.md
