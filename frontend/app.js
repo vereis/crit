@@ -50,6 +50,8 @@
   let focusedFilePath = null;
   let focusedElement = null; // currently focused navigable element
   let navElements = []; // cached .kb-nav list, rebuilt on render
+  let changeGroups = [];      // [{elements: [DOM], filePath: string}]
+  let currentChangeIdx = -1;
 
   const enc = encodeURIComponent;
 
@@ -255,6 +257,11 @@
       scopeToggle.querySelectorAll('.toggle-btn').forEach(function(b) {
         b.classList.toggle('active', b.dataset.scope === diffScope);
       });
+    }
+
+    // Hide file-mode-only shortcuts in git mode
+    if (session.mode === 'git') {
+      document.querySelectorAll('.shortcut-filemode-only').forEach(function(el) { el.style.display = 'none'; });
     }
 
     updateHeaderRound();
@@ -1080,6 +1087,74 @@
 
   function rebuildNavList() {
     navElements = Array.from(document.querySelectorAll('.kb-nav'));
+    buildChangeGroups();
+  }
+
+  function buildChangeGroups() {
+    changeGroups = [];
+    var all = document.querySelectorAll('.line-block-changed');
+    if (all.length === 0) { currentChangeIdx = -1; updateChangeCounters(); return; }
+    var group = null;
+    for (var i = 0; i < all.length; i++) {
+      var el = all[i];
+      var fp = el.dataset.filePath;
+      // Start new group if file changes or elements aren't consecutive siblings
+      if (!group || group.filePath !== fp || !isConsecutiveSibling(group.elements[group.elements.length - 1], el)) {
+        group = { elements: [el], filePath: fp };
+        changeGroups.push(group);
+      } else {
+        group.elements.push(el);
+      }
+    }
+    currentChangeIdx = -1;
+    updateChangeCounters();
+  }
+
+  function isConsecutiveSibling(a, b) {
+    // Check if b immediately follows a, skipping comment elements between them
+    var node = a.nextElementSibling;
+    while (node && node !== b) {
+      if (node.classList.contains('line-block')) return false; // non-changed block in between
+      node = node.nextElementSibling;
+    }
+    return node === b;
+  }
+
+  function navigateToChange(dir) {
+    if (changeGroups.length === 0) return;
+    // Remove previous flash
+    document.querySelectorAll('.change-flash').forEach(function(el) { el.classList.remove('change-flash'); });
+    if (dir > 0) {
+      currentChangeIdx = (currentChangeIdx + 1) % changeGroups.length;
+    } else {
+      currentChangeIdx = (currentChangeIdx - 1 + changeGroups.length) % changeGroups.length;
+    }
+    var group = changeGroups[currentChangeIdx];
+    group.elements[0].scrollIntoView({ block: 'center', behavior: 'smooth' });
+    group.elements.forEach(function(el) { el.classList.add('change-flash'); });
+    focusedElement = group.elements[0];
+    focusedFilePath = group.filePath;
+    focusedBlockIndex = parseInt(group.elements[0].dataset.blockIndex);
+    updateChangeCounters();
+  }
+
+  function updateChangeCounters() {
+    var labels = document.querySelectorAll('.change-nav-label');
+    labels.forEach(function(label) {
+      var fp = label.dataset.filePath;
+      // Count groups for this file
+      var fileGroups = changeGroups.filter(function(g) { return g.filePath === fp; });
+      var total = fileGroups.length;
+      // Find current index within this file's groups
+      var current = 0;
+      if (currentChangeIdx >= 0) {
+        var globalGroup = changeGroups[currentChangeIdx];
+        if (globalGroup.filePath === fp) {
+          current = fileGroups.indexOf(globalGroup) + 1;
+        }
+      }
+      label.textContent = (current || '-') + ' / ' + total + ' change' + (total !== 1 ? 's' : '');
+    });
   }
 
   // Re-render only a single file section (preserves scroll position)
@@ -1176,6 +1251,24 @@
         renderFileByPath(file.path);
       });
       header.appendChild(toggle);
+
+      // Change navigation widget (only in document view)
+      if (file.viewMode === 'document') {
+        var changeNav = document.createElement('div');
+        changeNav.className = 'change-nav';
+        changeNav.innerHTML =
+          '<button class="change-nav-btn" data-dir="-1" title="Previous change (N)">&#9650;</button>' +
+          '<span class="change-nav-label" data-file-path="' + escapeHtml(file.path) + '"></span>' +
+          '<button class="change-nav-btn" data-dir="1" title="Next change (n)">&#9660;</button>';
+        changeNav.addEventListener('click', function(e) {
+          var btn = e.target.closest('.change-nav-btn');
+          if (!btn) return;
+          e.preventDefault();
+          e.stopPropagation();
+          navigateToChange(parseInt(btn.dataset.dir));
+        });
+        header.appendChild(changeNav);
+      }
     }
 
     // Viewed checkbox
@@ -1546,6 +1639,19 @@
     return container;
   }
 
+  // ===== Change Detection (for inter-round diffs in document view) =====
+  function getChangedLineNumbers(file) {
+    if (!file.diffHunks || file.diffHunks.length === 0) return null;
+    var changed = new Set();
+    for (var h = 0; h < file.diffHunks.length; h++) {
+      var lines = file.diffHunks[h].Lines || [];
+      for (var i = 0; i < lines.length; i++) {
+        if (lines[i].Type === 'add' && lines[i].NewNum) changed.add(lines[i].NewNum);
+      }
+    }
+    return changed.size > 0 ? changed : null;
+  }
+
   // ===== Document View (Markdown) =====
   function renderDocumentView(file) {
     const container = document.createElement('div');
@@ -1555,6 +1661,8 @@
     const commentsMap = buildCommentsMap(file.comments);
 
     const commentRangeSet = buildCommentedRangeSet(file.comments);
+
+    const changedLines = (file.viewMode === 'document') ? getChangedLineNumbers(file) : null;
 
     for (let bi = 0; bi < file.lineBlocks.length; bi++) {
       const block = file.lineBlocks[bi];
@@ -1573,6 +1681,13 @@
         if (commentRangeSet.has(ln + ':')) { blockInCommentRange = true; break; }
       }
       if (blockInCommentRange) lineBlockEl.classList.add('has-comment');
+
+      // Mark blocks that overlap inter-round changes
+      if (changedLines) {
+        for (let ln = block.startLine; ln <= block.endLine; ln++) {
+          if (changedLines.has(ln)) { lineBlockEl.classList.add('line-block-changed'); break; }
+        }
+      }
 
       // Selection highlight (during drag or when form is open)
       if (activeFilePath === file.path && selectionStart !== null && selectionEnd !== null) {
@@ -3525,6 +3640,18 @@
         // Toggle viewed on the file that owns the focused element
         var vfp = focusedElement && (focusedElement.dataset.filePath || focusedElement.dataset.diffFilePath);
         if (vfp) toggleViewed(vfp);
+        break;
+      }
+      case 'n': {
+        if (session.mode === 'git') break;
+        e.preventDefault();
+        navigateToChange(1);
+        break;
+      }
+      case 'N': {
+        if (session.mode === 'git') break;
+        e.preventDefault();
+        navigateToChange(-1);
         break;
       }
       case '?': {

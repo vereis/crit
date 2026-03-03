@@ -342,6 +342,19 @@ body {
 .line-block.focused {
   background: var(--accent-subtle);
 }
+
+.line-block.line-block-changed {
+  box-shadow: inset 3px 0 0 var(--orange);
+}
+
+@keyframes change-flash {
+  0%, 15% { background-color: rgba(255, 158, 100, 0.15); }
+  100% { background-color: transparent; }
+}
+.line-block.change-flash {
+  animation: change-flash 1s ease-out;
+}
+
 .diff-line.focused, .diff-split-row.focused {
   background: var(--selection-bg);
 }
@@ -1178,6 +1191,7 @@ body.dragging .line-comment-gutter.drag-range:not(.drag-endpoint) .line-add { op
   #headerUpdate { display: none !important; }
   .file-header { padding: 8px 12px; }
   .file-header-toggle { display: none; }
+  .change-nav { display: none; }
   .scope-toggle { display: none !important; }
   .diff-mode-toggle { display: none !important; }
 
@@ -1529,6 +1543,39 @@ body.dragging .line-comment-gutter.drag-range:not(.drag-endpoint) .line-add { op
   box-shadow: 0 1px 2px rgba(0,0,0,0.1);
 }
 .file-header-toggle .toggle-btn:hover:not(.active) { background: var(--bg-hover); }
+
+/* Change navigation widget (document view) */
+.change-nav {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: 8px;
+}
+.change-nav-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  background: var(--bg-primary);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--fg-muted);
+  cursor: pointer;
+  font-size: 8px;
+  line-height: 1;
+  transition: all 0.15s;
+}
+.change-nav-btn:hover {
+  background: var(--bg-hover);
+  color: var(--fg-primary);
+}
+.change-nav-label {
+  font-size: 11px;
+  color: var(--fg-muted);
+  white-space: nowrap;
+}
 
 /* Scope toggle in header (all/branch/staged/unstaged) */
 .scope-toggle {
