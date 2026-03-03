@@ -1,7 +1,5 @@
 # Crit
 
-Don't let your agent build the wrong thing.
-
 Your agent writes plans and code. Before any of it lands, review it. Crit opens a browser-based UI where you leave inline comments on any file: plans, code diffs, specs, whatever your agent produced. Click "Finish Review" and a structured prompt goes to your clipboard. Paste it back, the agent iterates, Crit shows you the diff. Repeat until it's right.
 
 ```bash
@@ -9,7 +7,7 @@ crit              # auto-detect changed files in your repo
 crit plan.md      # review specific files
 ```
 
-Works with Claude Code, Cursor, GitHub Copilot, Aider, Cline, Windsurf, or any agent that reads files.
+Works with Claude Code, Cursor, GitHub Copilot, Aider, Cline, Windsurf - any agent that reads files.
 
 ![Crit review UI](images/demo-overview.png)
 
@@ -85,7 +83,9 @@ Grab the latest binary for your platform from [Releases](https://github.com/toma
 
 ### Git review
 
-Run `crit` with no arguments. Crit auto-detects changed files in your repo and opens them as syntax-highlighted git diffs. On a feature branch, it shows everything that changed since the branch diverged from main. On the default branch, it shows staged, unstaged, and untracked changes. A file tree on the left shows every file with its status (added, modified, deleted) and comment counts. Toggle between split and unified diff views.
+Run `crit` with no arguments. Crit auto-detects changed files in your repo and opens them as syntax-highlighted git diffs. A file tree on the left shows every file with its status (added, modified, deleted) and comment counts. Toggle between split and unified diff views.
+
+![Crit review for your branch](images/git-mode.png)
 
 ### File review
 
