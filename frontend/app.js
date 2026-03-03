@@ -757,6 +757,7 @@
   // ===== File Tree Sidebar =====
   var activeTreePath = null;
   var treeObserver = null;
+  var ignoreTreeObserverUntil = 0;
   var treeFolderState = {}; // { 'src': true, 'src/components': false } — true = collapsed
 
   function buildFileTree(fileList) {
@@ -1031,6 +1032,8 @@
     if (sections.length === 0) return;
 
     treeObserver = new IntersectionObserver(function(entries) {
+      // Skip observer updates briefly after a manual scrollToFile click
+      if (Date.now() < ignoreTreeObserverUntil) return;
       // Find the topmost visible section
       var bestPath = null;
       var bestTop = Infinity;
@@ -1063,6 +1066,8 @@
     var file = getFileByPath(filePath);
     if (file) file.collapsed = false;
     sectionEl.open = true;
+    // Suppress IntersectionObserver for 200ms so it doesn't override our manual active state
+    ignoreTreeObserverUntil = Date.now() + 200;
     sectionEl.scrollIntoView({ block: 'start', behavior: 'instant' });
     updateTreeActive(filePath);
   }
