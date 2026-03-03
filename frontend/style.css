@@ -374,9 +374,18 @@ body {
   align-items: flex-start;
   justify-content: flex-end;
 }
-/* Line numbers visible in document view */
+/* Document view: overlay comment button on line gutter instead of separate column */
 .document-wrapper .line-comment-gutter {
-  margin-left: 0;
+  position: absolute;
+  right: -10px;
+  top: 0;
+  bottom: 0;
+  width: 20px;
+  margin: 0;
+  padding-top: 1px;
+}
+.document-wrapper .line-gutter {
+  position: relative;
 }
 
 /* Comment gutter — separate column between line numbers and content */
@@ -539,6 +548,7 @@ body.dragging .line-comment-gutter.drag-range:not(.drag-endpoint) .line-add { op
 .document-wrapper .line-content.code-line {
   white-space: pre-wrap;
   overflow-wrap: anywhere;
+  margin-left: 4px;
 }
 /* Full-file code document view — no borders */
 .document-wrapper.code-document .line-content.code-line {

@@ -1709,16 +1709,13 @@
         lineBlockEl.classList.add('focused');
       }
 
-      // Line number gutter (hidden in git mode — line numbers are only meaningful for file-mode reviews)
+      // Line number gutter
       const gutter = document.createElement('div');
       gutter.className = 'line-gutter';
-
-      if (session.mode !== 'git') {
-        const lineNum = document.createElement('span');
-        lineNum.className = 'line-num';
-        lineNum.textContent = block.startLine;
-        gutter.appendChild(lineNum);
-      }
+      const lineNum = document.createElement('span');
+      lineNum.className = 'line-num';
+      lineNum.textContent = block.startLine;
+      gutter.appendChild(lineNum);
 
       // Comment gutter (separate column between line numbers and content)
       const commentGutter = document.createElement('div');
@@ -1757,8 +1754,8 @@
       html = rewriteImageSrcs(html);
       content.innerHTML = html;
 
+      gutter.appendChild(commentGutter);
       lineBlockEl.appendChild(gutter);
-      lineBlockEl.appendChild(commentGutter);
       lineBlockEl.appendChild(content);
       container.appendChild(lineBlockEl);
 
@@ -2368,7 +2365,7 @@
     const startLine = parseInt(gutter.dataset.startLine);
     const endLine = parseInt(gutter.dataset.endLine);
     const filePath = gutter.dataset.filePath;
-    const blockEl = gutter.parentElement;
+    const blockEl = gutter.closest('.line-block') || gutter.closest('.diff-split-side') || gutter.parentElement;
     const blockIndex = parseInt(blockEl.dataset.blockIndex);
 
     // Shift+click: extend selection

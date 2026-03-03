@@ -163,7 +163,7 @@ test.describe('Markdown Document/Diff Toggle — Git Mode', () => {
     await expect(section.locator('.change-nav')).not.toBeVisible();
   });
 
-  test('document view does not show line numbers in git mode', async ({ page }) => {
+  test('document view shows line numbers in git mode', async ({ page }) => {
     await loadPage(page);
     const section = mdSection(page);
 
@@ -171,9 +171,10 @@ test.describe('Markdown Document/Diff Toggle — Git Mode', () => {
     await section.locator('.file-header-toggle .toggle-btn[data-mode="document"]').click();
     await expect(section.locator('.document-wrapper')).toBeVisible();
 
-    // Gutters should exist but contain no line number text
+    // Line gutters with line numbers should be present
     await expect(section.locator('.line-gutter').first()).toBeVisible();
-    await expect(section.locator('.line-num')).toHaveCount(0);
+    const lineNums = section.locator('.line-gutter .line-num');
+    await expect(lineNums.first()).toBeVisible();
   });
 
   test('switching view clears line selection highlight', async ({ page, request }) => {
