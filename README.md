@@ -45,9 +45,9 @@ echo '.crit.json' >> .gitignore
 
 ## Demo
 
-A 2-minute walkthrough of plan review: leaving inline comments and handing off to an agent. Branch review (`crit` with no args) uses the same UI with git diffs instead of rendered markdown.
+A 5-minute walkthrough: leaving inline comments on a plan, followed by branch review (`crit` with no args), wchih uses the same UI with git diffs instead of rendered markdown.
 
-[![Crit demo](https://github.com/user-attachments/assets/dec9c069-9a99-4254-9b05-6d8db30820ed)](https://www.youtube.com/watch?v=w_Dswm2Ft-o)
+[![Crit demo](https://github.com/user-attachments/assets/dec9c069-9a99-4254-9b05-6d8db30820ed)](https://www.youtube.com/watch?v=XRjkRpXuLJc)
 
 ## Install
 
