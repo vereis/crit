@@ -3120,12 +3120,29 @@
     const el = document.createElement('div');
     el.className = 'resolved-comment';
     el.dataset.commentId = comment.id;
-    el.innerHTML =
-      '<div class="resolved-comment-header">' +
-        '<span class="resolved-check">\u2713</span>' +
-        '<span class="resolved-body">' + escapeHtml(comment.body) + '</span>' +
-      '</div>' +
-      (comment.resolution_note ? '<span class="resolved-note">' + escapeHtml(comment.resolution_note) + '</span>' : '');
+
+    const header = document.createElement('div');
+    header.className = 'resolved-comment-header';
+
+    const check = document.createElement('span');
+    check.className = 'resolved-check';
+    check.textContent = '\u2713';
+
+    const body = document.createElement('div');
+    body.className = 'resolved-body';
+    body.innerHTML = commentMd.render(comment.body);
+
+    header.appendChild(check);
+    header.appendChild(body);
+    el.appendChild(header);
+
+    if (comment.resolution_note) {
+      const note = document.createElement('span');
+      note.className = 'resolved-note';
+      note.textContent = comment.resolution_note;
+      el.appendChild(note);
+    }
+
     el.addEventListener('click', function() { el.classList.toggle('expanded'); });
     return el;
   }

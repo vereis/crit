@@ -73,7 +73,7 @@ curl -sf -X POST "http://127.0.0.1:$PORT/api/file/comments?path=$ENCODED_PATH" \
   -H 'Content-Type: application/json' \
   -d '{
     "start_line": 61, "end_line": 62,
-    "body": "Even on the internal network we should have some protection on this endpoint. A buggy upstream service could spam /send and flood user inboxes with no rate limiting in place. At minimum a shared secret header, and rate limiting per caller should be in the MVP checklist."
+    "body": "Even on the internal network we should have some protection on this endpoint. A buggy upstream service could spam `/send` and flood user inboxes with no rate limiting in place.\n\nAt minimum the MVP checklist should include:\n\n- A shared secret header (e.g. `X-Internal-Token`)\n- Rate limiting per caller\n\n**These are not optional** — a single misconfigured upstream can take down the notification pipeline."
   }' > /dev/null
 
 curl -sf -X POST "http://127.0.0.1:$PORT/api/file/comments?path=$ENCODED_PATH" \
