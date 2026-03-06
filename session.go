@@ -27,7 +27,7 @@ type Comment struct {
 	UpdatedAt       string `json:"updated_at"`
 	Resolved        bool   `json:"resolved,omitempty"`
 	ResolutionNote  string `json:"resolution_note,omitempty"`
-	ResolutionLines []int  `json:"resolution_lines,omitempty"`
+	ResolutionLines any    `json:"resolution_lines,omitempty"`
 	CarriedForward  bool   `json:"carried_forward,omitempty"`
 }
 

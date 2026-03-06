@@ -334,6 +334,55 @@ func TestSession_LoadCritJSON(t *testing.T) {
 	}
 }
 
+func TestSession_LoadResolvedComments_StringResolutionLines(t *testing.T) {
+	s := newTestSession(t)
+	s.AddComment("plan.md", 1, 1, "", "fix this")
+
+	s.mu.Lock()
+	if s.writeTimer != nil {
+		s.writeTimer.Stop()
+	}
+	s.mu.Unlock()
+	s.WriteFiles()
+
+	// Simulate what an agent does: read .crit.json, add resolved + string resolution_lines, write back
+	data, err := os.ReadFile(s.critJSONPath())
+	if err != nil {
+		t.Fatalf("read .crit.json: %v", err)
+	}
+	var raw map[string]any
+	if err := json.Unmarshal(data, &raw); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	files := raw["files"].(map[string]any)
+	planFile := files["plan.md"].(map[string]any)
+	comments := planFile["comments"].([]any)
+	comment := comments[0].(map[string]any)
+	comment["resolved"] = true
+	comment["resolution_note"] = "Fixed it"
+	comment["resolution_lines"] = "1-5" // agent writes string, not []int
+	data, _ = json.MarshalIndent(raw, "", "  ")
+	if err := os.WriteFile(s.critJSONPath(), data, 0644); err != nil {
+		t.Fatalf("write .crit.json: %v", err)
+	}
+
+	// Now loadResolvedComments should parse successfully despite string resolution_lines
+	s.loadResolvedComments()
+
+	s.mu.RLock()
+	f := s.fileByPathLocked("plan.md")
+	if len(f.PreviousComments) != 1 {
+		t.Fatalf("expected 1 PreviousComment, got %d", len(f.PreviousComments))
+	}
+	if !f.PreviousComments[0].Resolved {
+		t.Error("expected comment to be resolved")
+	}
+	if f.PreviousComments[0].ResolutionNote != "Fixed it" {
+		t.Errorf("ResolutionNote = %q, want %q", f.PreviousComments[0].ResolutionNote, "Fixed it")
+	}
+	s.mu.RUnlock()
+}
+
 func TestSession_SignalRoundComplete(t *testing.T) {
 	s := newTestSession(t)
 	s.AddComment("plan.md", 1, 1, "", "fix this")
