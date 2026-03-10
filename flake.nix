@@ -12,8 +12,7 @@
       packages = forAllSystems (system:
         let
           pkgs = nixpkgs.legacyPackages.${system};
-        in {
-          default = pkgs.buildGo126Module {
+          crit = pkgs.buildGo126Module {
             pname = "crit";
             inherit version;
             src = self;
@@ -27,6 +26,9 @@
               mainProgram = "crit";
             };
           };
+        in {
+          inherit crit;
+          default = crit;
         });
 
       apps = forAllSystems (system: {
