@@ -1,5 +1,36 @@
-import { test, expect } from '@playwright/test';
+import { test, expect, type APIRequestContext } from '@playwright/test';
+import * as fs from 'fs';
 import { clearAllComments, loadPage, mdSection, switchToDocumentView, addComment, getMdPath } from './helpers';
+
+// Poll session API until the review round increments past `previousRound`.
+async function waitForRound(request: APIRequestContext, previousRound: number) {
+  await expect(async () => {
+    const session = await request.get('/api/session').then(r => r.json());
+    expect(session.review_round).toBeGreaterThan(previousRound);
+  }).toPass({ timeout: 5000 });
+}
+
+// Finish round, mark all comments as resolved in .crit.json, then complete the round.
+async function finishAndResolve(request: APIRequestContext) {
+  const session = await request.get('/api/session').then(r => r.json());
+  const currentRound = session.review_round;
+
+  const finishRes = await request.post('/api/finish');
+  const finishData = await finishRes.json();
+  const critJsonPath = finishData.review_file;
+
+  const critJson = JSON.parse(fs.readFileSync(critJsonPath, 'utf-8'));
+  for (const fileKey of Object.keys(critJson.files)) {
+    for (const comment of critJson.files[fileKey].comments) {
+      comment.resolved = true;
+      comment.resolution_note = 'Fixed';
+    }
+  }
+  fs.writeFileSync(critJsonPath, JSON.stringify(critJson, null, 2));
+
+  await request.post('/api/round-complete');
+  await waitForRound(request, currentRound);
+}
 
 // ============================================================
 // Comment Count Badge — header badge shows comment count
@@ -40,10 +71,9 @@ test.describe('Comment Count Badge', () => {
     const countEl = page.locator('#commentCount');
     const badgeEl = page.locator('#commentCountNumber');
 
-    // Add a comment, finish round to resolve it, then add a new unresolved one
+    // Add a comment, resolve it via .crit.json, then complete the round
     await addComment(request, mdPath, 1, 'Will be resolved');
-    await request.post('/api/finish');
-    await request.post('/api/round-complete');
+    await finishAndResolve(request);
 
     // Now add 2 new unresolved comments (round 2)
     await addComment(request, mdPath, 1, 'Unresolved one');
@@ -144,10 +174,9 @@ test.describe('Comment Count Badge', () => {
     const countEl = page.locator('#commentCount');
     const badgeEl = page.locator('#commentCountNumber');
 
-    // Add a comment, then finish the round to resolve it
+    // Add a comment, resolve it via .crit.json, then complete the round
     await addComment(request, mdPath, 1, 'Will be resolved');
-    await request.post('/api/finish');
-    await request.post('/api/round-complete');
+    await finishAndResolve(request);
 
     await loadPage(page);
 
