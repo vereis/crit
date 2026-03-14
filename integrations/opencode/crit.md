@@ -14,8 +14,8 @@ If the `crit` skill is available, load it first.
 Choose what to review based on context:
 
 1. If the user provided `$ARGUMENTS` (for example, `/crit plan.md`), review that file.
-2. Otherwise, check for uncommitted git changes - if there are changes, run `crit` with no arguments.
-3. If there are no git changes, search the working directory for recent `.md` files that look like plans or specs.
+2. If no argument, check if a plan was written earlier in this conversation. If so, review that file.
+3. Otherwise, run `crit` with no arguments — it auto-detects what to review: uncommitted changes, or all changes on the current branch vs the default branch. Works on clean branches too.
 
 Show the selected mode or file to the user and ask for confirmation before proceeding.
 

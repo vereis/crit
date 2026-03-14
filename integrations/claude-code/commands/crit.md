@@ -12,16 +12,8 @@ Review and revise code changes or a plan using `crit` for inline comment review.
 Choose what to review based on context:
 
 1. **User argument** - if the user provided `$ARGUMENTS` (e.g., `/crit my-plan.md`), review that file
-2. **Git changes** - if no argument, check for uncommitted changes:
-   ```bash
-   git status --porcelain 2>/dev/null | head -1
-   ```
-   If there are changes, run `crit` with no arguments (git mode) - it auto-detects changed files
-3. **Find a plan** - if no changes, search for recent plan files:
-   ```bash
-   command ls -t ~/.claude/plans/*.md 2>/dev/null | grep -v -E '(-agent-)' | head -5
-   ```
-   Or search the working directory for plan-like `.md` files
+2. **Recent plan** - if no argument, check if a plan was written earlier in this conversation. If so, review that file with `crit <plan-file>`
+3. **Branch review** - otherwise, run `crit` with no arguments. It auto-detects what to review: uncommitted changes, or all changes on the current branch vs the default branch. Works on clean branches too.
 
 Show the selected mode/file to the user and ask for confirmation.
 

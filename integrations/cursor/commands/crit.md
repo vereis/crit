@@ -7,8 +7,8 @@ Review and revise code changes or a plan using `crit` for inline comment review.
 Choose what to review based on context:
 
 1. If the user specified a file after the command, use that
-2. Otherwise, check for uncommitted git changes - if found, run `crit` with no arguments
-3. If no changes, search for `.md` files in the current directory that look like plans
+2. If no argument, check if a plan was written earlier in this conversation. If so, review that file
+3. Otherwise, run `crit` with no arguments — it auto-detects what to review: uncommitted changes, or all changes on the current branch vs the default branch. Works on clean branches too.
 
 Show the selected mode/file to the user and ask for confirmation before proceeding.
 
