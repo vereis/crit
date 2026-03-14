@@ -7,7 +7,10 @@
   "plugins": [
     {
       "name": "crit",
-      "source": "./integrations/claude-code"
+      "description": "Close the feedback loop on AI coding: review plans and code changes with GitHub-style inline comments, then let the agent address them.",
+      "source": "./integrations/claude-code",
+      "homepage": "https://crit.live",
+      "category": "development"
     }
   ]
 }
