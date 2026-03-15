@@ -63,8 +63,12 @@ test.describe('Share — Multi-File Mode', () => {
     const shareBtn = page.locator('#shareBtn');
     await shareBtn.click();
 
-    // Wait for the share notice to appear (confirms the request completed)
-    await expect(page.locator('#toast-share')).toBeVisible();
+    // Wait for the share modal to appear (confirms the request completed)
+    await expect(page.locator('.share-overlay')).toBeVisible();
+
+    // Verify QR code renders in the modal
+    const qrContainer = page.locator('#modalQR');
+    await expect(qrContainer.locator('svg')).toBeVisible();
 
     // Verify the payload structure
     expect(capturedPayload).not.toBeNull();
