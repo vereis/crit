@@ -1545,7 +1545,7 @@
       if (block.isEmpty) contentClasses += ' empty-line';
       if (block.cssClass) contentClasses += ' ' + block.cssClass;
       content.className = contentClasses;
-      var html = block.html;
+      var html = block.wordDiffHtml || block.html;
       html = processTaskLists(html);
       html = rewriteImageSrcs(html);
       content.innerHTML = html;
@@ -1588,26 +1588,81 @@
     var prevBlocks = annotateBlocks(file.previousLineBlocks, lineSets.removed);
     var currBlocks = annotateBlocks(file.lineBlocks, lineSets.added);
 
-    // Left side (previous round — removed highlighting, no comments)
-    var leftSide = document.createElement('div');
-    leftSide.className = 'diff-view-side';
+    // Compute word-level diffs for paired changed blocks.
+    // Only apply when blocks are sufficiently similar (>30% token overlap) to avoid noise.
+    var prevDiffBlocks = prevBlocks.filter(function(b) { return b.isDiff; });
+    var currDiffBlocks = currBlocks.filter(function(b) { return b.isDiff; });
+    var pairCount = Math.min(prevDiffBlocks.length, currDiffBlocks.length);
+    for (var p = 0; p < pairCount; p++) {
+      var oldText = htmlToText(prevDiffBlocks[p].html);
+      var newText = htmlToText(currDiffBlocks[p].html);
+      var wd = wordDiff(oldText, newText);
+      if (wd) {
+        // Check similarity: if too few tokens are unchanged, skip (blocks probably don't correspond)
+        var oldChangedChars = wd.oldRanges.reduce(function(s, r) { return s + r[1] - r[0]; }, 0);
+        var newChangedChars = wd.newRanges.reduce(function(s, r) { return s + r[1] - r[0]; }, 0);
+        if (oldText.length > 0 && oldChangedChars / oldText.length > 0.7) continue;
+        if (newText.length > 0 && newChangedChars / newText.length > 0.7) continue;
+        prevDiffBlocks[p].wordDiffHtml = applyWordDiffToHtml(prevDiffBlocks[p].html, wd.oldRanges, 'diff-word-del');
+        currDiffBlocks[p].wordDiffHtml = applyWordDiffToHtml(currDiffBlocks[p].html, wd.newRanges, 'diff-word-add');
+      }
+    }
+
+    // Labels row
     var leftLabel = document.createElement('div');
     leftLabel.className = 'diff-view-side-label';
     leftLabel.textContent = 'Previous round';
-    leftSide.appendChild(leftLabel);
-    leftSide.appendChild(renderRenderedDiffBlocks(prevBlocks, 'diff-removed', file, false));
-
-    // Right side (current round — added highlighting, comments enabled)
-    var rightSide = document.createElement('div');
-    rightSide.className = 'diff-view-side';
+    container.appendChild(leftLabel);
     var rightLabel = document.createElement('div');
     rightLabel.className = 'diff-view-side-label';
     rightLabel.textContent = 'Current round';
-    rightSide.appendChild(rightLabel);
-    rightSide.appendChild(renderRenderedDiffBlocks(currBlocks, 'diff-added', file, true));
+    container.appendChild(rightLabel);
 
-    container.appendChild(leftSide);
-    container.appendChild(rightSide);
+    // Two-pointer merge for horizontal alignment
+    var commentsMap = buildCommentsMap(file.comments);
+    var commentRangeSet = buildCommentedRangeSet(file.comments);
+    var oldIdx = 0, newIdx = 0;
+
+    while (oldIdx < prevBlocks.length || newIdx < currBlocks.length) {
+      var leftCell = document.createElement('div');
+      leftCell.className = 'diff-view-cell';
+      var rightCell = document.createElement('div');
+      rightCell.className = 'diff-view-cell';
+
+      if (oldIdx >= prevBlocks.length) {
+        // Old exhausted — remaining new blocks are additions
+        rightCell.appendChild(renderUnifiedBlock(currBlocks[newIdx], 'diff-added', file, true, newIdx, commentsMap, commentRangeSet));
+        newIdx++;
+      } else if (newIdx >= currBlocks.length) {
+        // New exhausted — remaining old blocks are deletions
+        leftCell.appendChild(renderUnifiedBlock(prevBlocks[oldIdx], 'diff-removed', file, false, oldIdx, null, null));
+        oldIdx++;
+      } else if (prevBlocks[oldIdx].isDiff && currBlocks[newIdx].isDiff) {
+        // Both changed — paired change
+        leftCell.appendChild(renderUnifiedBlock(prevBlocks[oldIdx], 'diff-removed', file, false, oldIdx, null, null));
+        rightCell.appendChild(renderUnifiedBlock(currBlocks[newIdx], 'diff-added', file, true, newIdx, commentsMap, commentRangeSet));
+        oldIdx++;
+        newIdx++;
+      } else if (prevBlocks[oldIdx].isDiff) {
+        // Old removed only — spacer on right
+        leftCell.appendChild(renderUnifiedBlock(prevBlocks[oldIdx], 'diff-removed', file, false, oldIdx, null, null));
+        oldIdx++;
+      } else if (currBlocks[newIdx].isDiff) {
+        // New added only — spacer on left
+        rightCell.appendChild(renderUnifiedBlock(currBlocks[newIdx], 'diff-added', file, true, newIdx, commentsMap, commentRangeSet));
+        newIdx++;
+      } else {
+        // Both unchanged — render both, advance both
+        leftCell.appendChild(renderUnifiedBlock(prevBlocks[oldIdx], null, file, false, oldIdx, null, null));
+        rightCell.appendChild(renderUnifiedBlock(currBlocks[newIdx], null, file, true, newIdx, commentsMap, commentRangeSet));
+        oldIdx++;
+        newIdx++;
+      }
+
+      container.appendChild(leftCell);
+      container.appendChild(rightCell);
+    }
+
     return container;
   }
 
@@ -1689,7 +1744,7 @@
     if (block.isEmpty) contentClasses += ' empty-line';
     if (block.cssClass) contentClasses += ' ' + block.cssClass;
     contentEl.className = contentClasses;
-    var html = block.html;
+    var html = block.wordDiffHtml || block.html;
     html = processTaskLists(html);
     html = rewriteImageSrcs(html);
     contentEl.innerHTML = html;
@@ -1742,11 +1797,42 @@
         container.appendChild(renderUnifiedBlock(oldBlocks[oldIdx], 'diff-removed', file, false, oldIdx, null, null));
         oldIdx++;
       } else if (classifyBlock(oldBlocks[oldIdx], lineSets.removed)) {
-        // Old block is removed — emit with strikethrough
-        container.appendChild(renderUnifiedBlock(oldBlocks[oldIdx], 'diff-removed', file, false, oldIdx, null, null));
-        oldIdx++;
+        // Collect consecutive removed blocks
+        var removedRun = [];
+        while (oldIdx < oldBlocks.length && classifyBlock(oldBlocks[oldIdx], lineSets.removed)) {
+          removedRun.push(oldIdx);
+          oldIdx++;
+        }
+        // Collect consecutive added blocks
+        var addedRun = [];
+        while (newIdx < newBlocks.length && classifyBlock(newBlocks[newIdx], lineSets.added)) {
+          addedRun.push(newIdx);
+          newIdx++;
+        }
+        // Compute word diffs for paired removed/added blocks (with similarity check)
+        var runPairCount = Math.min(removedRun.length, addedRun.length);
+        for (var rp = 0; rp < runPairCount; rp++) {
+          var oldText = htmlToText(oldBlocks[removedRun[rp]].html);
+          var newText = htmlToText(newBlocks[addedRun[rp]].html);
+          var wd = wordDiff(oldText, newText);
+          if (wd) {
+            var oldChangedChars = wd.oldRanges.reduce(function(s, r) { return s + r[1] - r[0]; }, 0);
+            var newChangedChars = wd.newRanges.reduce(function(s, r) { return s + r[1] - r[0]; }, 0);
+            if (oldText.length > 0 && oldChangedChars / oldText.length > 0.7) continue;
+            if (newText.length > 0 && newChangedChars / newText.length > 0.7) continue;
+            oldBlocks[removedRun[rp]].wordDiffHtml = applyWordDiffToHtml(oldBlocks[removedRun[rp]].html, wd.oldRanges, 'diff-word-del');
+            newBlocks[addedRun[rp]].wordDiffHtml = applyWordDiffToHtml(newBlocks[addedRun[rp]].html, wd.newRanges, 'diff-word-add');
+          }
+        }
+        // Emit all removed then all added
+        for (var ri = 0; ri < removedRun.length; ri++) {
+          container.appendChild(renderUnifiedBlock(oldBlocks[removedRun[ri]], 'diff-removed', file, false, removedRun[ri], null, null));
+        }
+        for (var ai = 0; ai < addedRun.length; ai++) {
+          container.appendChild(renderUnifiedBlock(newBlocks[addedRun[ai]], 'diff-added', file, true, addedRun[ai], commentsMap, commentRangeSet));
+        }
       } else if (classifyBlock(newBlocks[newIdx], lineSets.added)) {
-        // New block is added — emit with green highlight + comments
+        // New block is added (no preceding removal) — emit with green highlight + comments
         container.appendChild(renderUnifiedBlock(newBlocks[newIdx], 'diff-added', file, true, newIdx, commentsMap, commentRangeSet));
         newIdx++;
       } else {
@@ -1977,6 +2063,222 @@
   function renderDiffHunks(file) {
     if (diffMode === 'split') return renderDiffSplit(file);
     return renderDiffUnified(file);
+  }
+
+  // ===== Word-Level Diff =====
+
+  // Split a line into tokens: words (alphanumeric + underscore) and individual non-word characters.
+  // Returns an array of strings. Example: 'name := "hello"' → ['name', ' ', ':', '=', ' ', '"', 'hello', '"']
+  function tokenize(line) {
+    var tokens = [];
+    var re = /[\w]+|[^\w]/g;
+    var match;
+    while ((match = re.exec(line)) !== null) {
+      tokens.push(match[0]);
+    }
+    return tokens;
+  }
+
+  // Compute LCS membership for two token arrays.
+  // Returns { oldKeep: boolean[], newKeep: boolean[] } where true = token is in LCS (unchanged).
+  function computeTokenLCS(oldTokens, newTokens) {
+    var m = oldTokens.length;
+    var n = newTokens.length;
+
+    // Build DP table
+    var dp = [];
+    for (var i = 0; i <= m; i++) {
+      dp[i] = new Array(n + 1).fill(0);
+    }
+    for (var i = 1; i <= m; i++) {
+      for (var j = 1; j <= n; j++) {
+        if (oldTokens[i - 1] === newTokens[j - 1]) {
+          dp[i][j] = dp[i - 1][j - 1] + 1;
+        } else {
+          dp[i][j] = Math.max(dp[i - 1][j], dp[i][j - 1]);
+        }
+      }
+    }
+
+    // Backtrack to mark LCS membership
+    var oldKeep = new Array(m).fill(false);
+    var newKeep = new Array(n).fill(false);
+    var i = m, j = n;
+    while (i > 0 && j > 0) {
+      if (oldTokens[i - 1] === newTokens[j - 1]) {
+        oldKeep[i - 1] = true;
+        newKeep[j - 1] = true;
+        i--; j--;
+      } else if (dp[i - 1][j] >= dp[i][j - 1]) {
+        i--;
+      } else {
+        j--;
+      }
+    }
+
+    return { oldKeep: oldKeep, newKeep: newKeep };
+  }
+
+  // Compute word-level diff between two lines.
+  // Returns { oldRanges, newRanges } where each range is [startCharIdx, endCharIdx] in the raw text.
+  // Returns null if lines are too long, identical, or completely different.
+  function wordDiff(oldLine, newLine) {
+    // Skip for very long lines (perf guard: LCS is O(m*n) on token count)
+    if (oldLine.length > 500 || newLine.length > 500) return null;
+    // Skip for lines with no spaces and >200 chars (likely minified/binary)
+    if (oldLine.length > 200 && !oldLine.includes(' ')) return null;
+    if (newLine.length > 200 && !newLine.includes(' ')) return null;
+
+    var oldTokens = tokenize(oldLine);
+    var newTokens = tokenize(newLine);
+
+    // Skip if token counts are huge
+    if (oldTokens.length > 200 || newTokens.length > 200) return null;
+
+    var result = computeTokenLCS(oldTokens, newTokens);
+    var oldKeep = result.oldKeep;
+    var newKeep = result.newKeep;
+
+    // If everything changed, don't bother with word-level highlights
+    var oldUnchanged = oldKeep.filter(Boolean).length;
+    var newUnchanged = newKeep.filter(Boolean).length;
+    if (oldUnchanged === 0 && newUnchanged === 0) return null;
+
+    // If nothing changed (lines are identical), skip
+    if (oldUnchanged === oldTokens.length && newUnchanged === newTokens.length) return null;
+
+
+    // Build character ranges for changed tokens
+    function buildRanges(tokens, keep) {
+      var ranges = [];
+      var charIdx = 0;
+      var rangeStart = -1;
+      for (var i = 0; i < tokens.length; i++) {
+        if (!keep[i]) {
+          if (rangeStart === -1) rangeStart = charIdx;
+        } else {
+          if (rangeStart !== -1) {
+            ranges.push([rangeStart, charIdx]);
+            rangeStart = -1;
+          }
+        }
+        charIdx += tokens[i].length;
+      }
+      if (rangeStart !== -1) ranges.push([rangeStart, charIdx]);
+      return ranges;
+    }
+
+    return {
+      oldRanges: buildRanges(oldTokens, oldKeep),
+      newRanges: buildRanges(newTokens, newKeep),
+    };
+  }
+
+  // Overlay word-diff highlight ranges onto syntax-highlighted HTML.
+  // Walks the HTML string, tracking visible character position (skipping HTML tags),
+  // and inserts <span class="cssClass"> wrappers around the character ranges.
+  // ranges: array of [startCharIdx, endCharIdx] in the raw text.
+  function applyWordDiffToHtml(html, ranges, cssClass) {
+    if (!ranges || ranges.length === 0) return html;
+
+    var result = '';
+    var charIdx = 0;       // visible character index
+    var rangeIdx = 0;      // which range we're processing
+    var inRange = false;   // currently inside a word-diff span
+    var i = 0;             // position in html string
+
+    while (i < html.length) {
+      // Skip HTML tags (don't count them as visible characters)
+      if (html[i] === '<') {
+        // If we're in a word-diff range, close it before the tag, reopen after
+        if (inRange) result += '</span>';
+        var tagEnd = html.indexOf('>', i);
+        if (tagEnd === -1) { result += html.slice(i); break; }
+        result += html.slice(i, tagEnd + 1);
+        i = tagEnd + 1;
+        if (inRange) result += '<span class="' + cssClass + '">';
+        continue;
+      }
+
+      // Handle HTML entities (e.g., &amp; &lt; &gt; &quot;) as single visible characters
+      var visibleChar;
+      if (html[i] === '&') {
+        var semiIdx = html.indexOf(';', i);
+        if (semiIdx !== -1 && semiIdx - i < 10) {
+          visibleChar = html.slice(i, semiIdx + 1);
+          i = semiIdx + 1;
+        } else {
+          visibleChar = html[i];
+          i++;
+        }
+      } else {
+        visibleChar = html[i];
+        i++;
+      }
+
+      // Check if we need to open a word-diff span
+      if (!inRange && rangeIdx < ranges.length && charIdx >= ranges[rangeIdx][0]) {
+        result += '<span class="' + cssClass + '">';
+        inRange = true;
+      }
+
+      result += visibleChar;
+      charIdx++;
+
+      // Check if we need to close a word-diff span
+      if (inRange && rangeIdx < ranges.length && charIdx >= ranges[rangeIdx][1]) {
+        result += '</span>';
+        inRange = false;
+        rangeIdx++;
+        // Check if immediately entering next range
+        if (rangeIdx < ranges.length && charIdx >= ranges[rangeIdx][0]) {
+          result += '<span class="' + cssClass + '">';
+          inRange = true;
+        }
+      }
+    }
+
+    if (inRange) result += '</span>';
+    return result;
+  }
+
+  // Strip HTML tags and decode entities to get visible text for word-diff comparison.
+  function htmlToText(html) {
+    var tmp = document.createElement('div');
+    tmp.innerHTML = html;
+    return tmp.textContent || '';
+  }
+
+  // Pre-compute word diffs for all paired del/add runs in a hunk.
+  // Returns a Map<lineIndex, { ranges, cssClass }> mapping hunk line indices to word-diff info.
+  function buildHunkWordDiffs(hunk) {
+    var wordDiffMap = new Map();
+    var lines = hunk.Lines;
+    var i = 0;
+    while (i < lines.length) {
+      if (lines[i].Type === 'del') {
+        // Collect consecutive dels
+        var delStart = i;
+        while (i < lines.length && lines[i].Type === 'del') i++;
+        // Collect consecutive adds
+        var addStart = i;
+        while (i < lines.length && lines[i].Type === 'add') i++;
+        // Pair 1:1
+        var delCount = addStart - delStart;
+        var addCount = i - addStart;
+        var pairCount = Math.min(delCount, addCount);
+        for (var p = 0; p < pairCount; p++) {
+          var wd = wordDiff(lines[delStart + p].Content, lines[addStart + p].Content);
+          if (wd) {
+            wordDiffMap.set(delStart + p, { ranges: wd.oldRanges, cssClass: 'diff-word-del' });
+            wordDiffMap.set(addStart + p, { ranges: wd.newRanges, cssClass: 'diff-word-add' });
+          }
+        }
+      } else {
+        i++;
+      }
+    }
+    return wordDiffMap;
   }
 
   // ===== Diff Gutter Drag (multi-line comment selection) =====
@@ -2231,7 +2533,10 @@
 
       container.appendChild(renderDiffHunkHeader(hunk));
 
-      for (const line of hunk.Lines) {
+      var wordDiffMap = buildHunkWordDiffs(hunk);
+
+      for (var li = 0; li < hunk.Lines.length; li++) {
+        var line = hunk.Lines[li];
         const lineEl = document.createElement('div');
         lineEl.className = 'diff-line';
         if (line.Type === 'add') lineEl.classList.add('addition');
@@ -2284,8 +2589,9 @@
 
         const contentEl = document.createElement('div');
         contentEl.className = 'diff-content';
-        const hlLine = highlightDiffLine(line.Content, line.Type === 'del' ? line.OldNum : line.NewNum, line.Type === 'del' ? 'old' : '', file.highlightCache, file.lang);
-        contentEl.innerHTML = hlLine;
+        var hlLine = highlightDiffLine(line.Content, line.Type === 'del' ? line.OldNum : line.NewNum, line.Type === 'del' ? 'old' : '', file.highlightCache, file.lang);
+        var wdInfo = wordDiffMap.get(li);
+        contentEl.innerHTML = wdInfo ? applyWordDiffToHtml(hlLine, wdInfo.ranges, wdInfo.cssClass) : hlLine;
 
         lineEl.appendChild(gutter);
         lineEl.appendChild(commentGutter);
@@ -2369,13 +2675,21 @@
           appendDiffForm(container, file.path, line.OldNum, 'old');
           appendDiffForm(container, file.path, line.NewNum, '');
         } else {
+          // Compute word-level diffs for paired del/add lines
+          var wordDiffs = [];
+          var pairCount = Math.min(seg.dels.length, seg.adds.length);
+          for (let j = 0; j < pairCount; j++) {
+            wordDiffs.push(wordDiff(seg.dels[j].Content, seg.adds[j].Content));
+          }
+
           const maxLen = Math.max(seg.dels.length, seg.adds.length);
           for (let j = 0; j < maxLen; j++) {
             const del = seg.dels[j] || null;
             const add = seg.adds[j] || null;
+            var wd = j < pairCount ? wordDiffs[j] : null;
             const row = makeSplitRow(
-              del ? { num: del.OldNum, content: del.Content, type: 'del' } : null,
-              add ? { num: add.NewNum, content: add.Content, type: 'add' } : null,
+              del ? { num: del.OldNum, content: del.Content, type: 'del', wordRanges: wd ? wd.oldRanges : null } : null,
+              add ? { num: add.NewNum, content: add.Content, type: 'add', wordRanges: wd ? wd.newRanges : null } : null,
               file, commentRangeSet
             );
             container.appendChild(row.el);
@@ -2428,7 +2742,8 @@
     const leftContent = document.createElement('div');
     leftContent.className = 'diff-content';
     if (left) {
-      leftContent.innerHTML = highlightDiffLine(left.content, left.num, 'old', file.highlightCache, file.lang);
+      var hlHtml = highlightDiffLine(left.content, left.num, 'old', file.highlightCache, file.lang);
+      leftContent.innerHTML = left.wordRanges ? applyWordDiffToHtml(hlHtml, left.wordRanges, 'diff-word-del') : hlHtml;
     }
     if (!left) leftEl.classList.add('empty');
 
@@ -2469,7 +2784,8 @@
     const rightContent = document.createElement('div');
     rightContent.className = 'diff-content';
     if (right) {
-      rightContent.innerHTML = highlightDiffLine(right.content, right.num, right.type === 'del' ? 'old' : '', file.highlightCache, file.lang);
+      var hlHtml = highlightDiffLine(right.content, right.num, right.type === 'del' ? 'old' : '', file.highlightCache, file.lang);
+      rightContent.innerHTML = right.wordRanges ? applyWordDiffToHtml(hlHtml, right.wordRanges, 'diff-word-add') : hlHtml;
     }
     if (!right) rightEl.classList.add('empty');
 
