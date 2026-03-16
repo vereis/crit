@@ -256,7 +256,7 @@ func TestPersistShareState(t *testing.T) {
 	dir := t.TempDir()
 
 	// Persist to new .crit.json
-	err := persistShareState(dir, "https://crit.live/r/abc", "tok_123")
+	err := persistShareState(dir, "https://crit.live/r/abc", "tok_123", "")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -288,7 +288,7 @@ func TestPersistShareState_PreservesExisting(t *testing.T) {
 	os.WriteFile(filepath.Join(dir, ".crit.json"), data, 0644)
 
 	// Persist share state
-	err := persistShareState(dir, "https://crit.live/r/def", "tok_456")
+	err := persistShareState(dir, "https://crit.live/r/def", "tok_456", "")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -511,6 +511,119 @@ func TestHandleShare_WrongMethod(t *testing.T) {
 	}
 }
 
+func TestHandleShare_AlreadyShared(t *testing.T) {
+	// Create a mock crit-web server (should NOT be called)
+	called := false
+	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		called = true
+		w.WriteHeader(http.StatusCreated)
+		json.NewEncoder(w).Encode(map[string]string{
+			"url":          "https://crit.live/r/new-token",
+			"delete_token": "new-del-token",
+		})
+	}))
+	defer mockServer.Close()
+
+	// Create session with existing share state (matches existing test patterns)
+	sess := &Session{
+		OutputDir:   t.TempDir(),
+		Files:       []*FileEntry{{Path: "plan.md", Content: "# Plan"}},
+		subscribers: make(map[chan SSEEvent]struct{}),
+	}
+	sess.SetSharedURLAndToken("https://crit.live/r/existing", "existing-del-token")
+
+	srv := &Server{session: sess, shareURL: mockServer.URL}
+
+	req := httptest.NewRequest(http.MethodPost, "/api/share", nil)
+	w := httptest.NewRecorder()
+	srv.handleShare(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+
+	var result map[string]any
+	json.NewDecoder(w.Body).Decode(&result)
+	if result["url"] != "https://crit.live/r/existing" {
+		t.Errorf("expected existing URL, got %v", result["url"])
+	}
+	if result["delete_token"] != "existing-del-token" {
+		t.Errorf("expected existing delete token, got %v", result["delete_token"])
+	}
+	if called {
+		t.Error("crit-web should NOT have been called for an already-shared review")
+	}
+}
+
+func TestLoadExistingShareState(t *testing.T) {
+	dir := t.TempDir()
+	critPath := filepath.Join(dir, ".crit.json")
+
+	// Legacy .crit.json without scope — loads unconditionally
+	cj := CritJSON{
+		ShareURL:    "https://crit.live/r/existing",
+		DeleteToken: "del-token-123",
+		Files:       map[string]CritJSONFile{},
+	}
+	data, _ := json.MarshalIndent(cj, "", "  ")
+	os.WriteFile(critPath, data, 0644)
+
+	url, token := loadExistingShareState(dir, []string{"anything.md"})
+	if url != "https://crit.live/r/existing" {
+		t.Errorf("expected existing URL, got %q", url)
+	}
+	if token != "del-token-123" {
+		t.Errorf("expected existing token, got %q", token)
+	}
+}
+
+func TestLoadExistingShareState_NoCritJSON(t *testing.T) {
+	dir := t.TempDir()
+	url, token := loadExistingShareState(dir, []string{"plan.md"})
+	if url != "" || token != "" {
+		t.Errorf("expected empty, got url=%q token=%q", url, token)
+	}
+}
+
+func TestLoadExistingShareState_NoShareState(t *testing.T) {
+	dir := t.TempDir()
+	critPath := filepath.Join(dir, ".crit.json")
+	cj := CritJSON{Files: map[string]CritJSONFile{}}
+	data, _ := json.MarshalIndent(cj, "", "  ")
+	os.WriteFile(critPath, data, 0644)
+
+	url, token := loadExistingShareState(dir, []string{"plan.md"})
+	if url != "" || token != "" {
+		t.Errorf("expected empty, got url=%q token=%q", url, token)
+	}
+}
+
+func TestLoadExistingShareState_ScopeMismatch(t *testing.T) {
+	dir := t.TempDir()
+	critPath := filepath.Join(dir, ".crit.json")
+
+	cj := CritJSON{
+		ShareURL:    "https://crit.live/r/old",
+		DeleteToken: "old-token",
+		ShareScope:  shareScope([]string{"old-plan.md"}),
+		Files:       map[string]CritJSONFile{},
+	}
+	data, _ := json.MarshalIndent(cj, "", "  ")
+	os.WriteFile(critPath, data, 0644)
+
+	// Different file set — should NOT return share state
+	url, token := loadExistingShareState(dir, []string{"new-plan.md"})
+	if url != "" || token != "" {
+		t.Errorf("expected empty for mismatched scope, got url=%q token=%q", url, token)
+	}
+
+	// Same file set — should return share state
+	url, token = loadExistingShareState(dir, []string{"old-plan.md"})
+	if url != "https://crit.live/r/old" {
+		t.Errorf("expected URL for matching scope, got %q", url)
+	}
+}
+
 func TestResolveShareURL(t *testing.T) {
 	// Isolate from real ~/.crit.config.json
 	homeDir := t.TempDir()
@@ -555,5 +668,26 @@ func TestResolveShareURL(t *testing.T) {
 				t.Errorf("resolveShareURL(%q) = %q, want %q", tt.flag, got, tt.expected)
 			}
 		})
+	}
+}
+
+func TestShareScope(t *testing.T) {
+	// Same paths in different order produce same hash
+	h1 := shareScope([]string{"b.md", "a.md"})
+	h2 := shareScope([]string{"a.md", "b.md"})
+	if h1 != h2 {
+		t.Errorf("expected same hash regardless of order, got %q vs %q", h1, h2)
+	}
+
+	// Different paths produce different hash
+	h3 := shareScope([]string{"c.md"})
+	if h1 == h3 {
+		t.Error("different file sets should produce different hashes")
+	}
+
+	// Empty produces a hash (not empty string)
+	h4 := shareScope([]string{})
+	if h4 == "" {
+		t.Error("empty file set should still produce a hash")
 	}
 }

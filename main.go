@@ -151,6 +151,27 @@ func main() {
 			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 			os.Exit(1)
 		}
+
+		// Idempotent: if already shared (same file set), print the existing URL.
+		sharePaths := make([]string, len(files))
+		for i, f := range files {
+			sharePaths[i] = f.Path
+		}
+		existingURL, _ := loadExistingShareState(critDir, sharePaths)
+		if existingURL != "" {
+			fmt.Println(existingURL)
+			if showQR {
+				fmt.Println()
+				qrterminal.GenerateWithConfig(existingURL, qrterminal.Config{
+					Level:      qrterminal.L,
+					Writer:     os.Stdout,
+					HalfBlocks: true,
+					QuietZone:  1,
+				})
+			}
+			os.Exit(0)
+		}
+
 		filePaths := make([]string, len(files))
 		for i, f := range files {
 			filePaths[i] = f.Path
@@ -163,7 +184,7 @@ func main() {
 			os.Exit(1)
 		}
 
-		if err := persistShareState(critDir, url, deleteToken); err != nil {
+		if err := persistShareState(critDir, url, deleteToken, shareScope(filePaths)); err != nil {
 			fmt.Fprintf(os.Stderr, "Warning: could not save share state to .crit.json: %v\n", err)
 		}
 
