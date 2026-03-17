@@ -827,6 +827,110 @@ func TestNewSessionFromGit_SubdirectoryCwd_UntrackedFiles(t *testing.T) {
 	t.Errorf("expected to find src/new.go in session files, got: %v", paths)
 }
 
+// TestNewSessionFromGit_BaseBranchParam verifies that setting defaultBranchOverride
+// causes NewSessionFromGit to diff against that branch instead of auto-detecting.
+func TestNewSessionFromGit_BaseBranchParam(t *testing.T) {
+	dir := initTestRepo(t)
+
+	// Reset DefaultBranch cache
+	defaultBranchOnce = sync.Once{}
+	defaultBranchOverride = ""
+
+	origDir, _ := os.Getwd()
+	os.Chdir(dir)
+	defer func() {
+		os.Chdir(origDir)
+		defaultBranchOverride = ""
+		defaultBranchOnce = sync.Once{}
+	}()
+
+	// Create a second branch "base" that acts as our custom base
+	runGit(t, dir, "checkout", "-b", "base")
+	writeFile(t, filepath.Join(dir, "base.go"), "package main\n")
+	runGit(t, dir, "add", "base.go")
+	runGit(t, dir, "commit", "-m", "base branch commit")
+
+	// Now create a feature branch off "base" with a new file
+	runGit(t, dir, "checkout", "-b", "feature")
+	writeFile(t, filepath.Join(dir, "feature.go"), "package main\n")
+	runGit(t, dir, "add", "feature.go")
+	runGit(t, dir, "commit", "-m", "feature commit")
+
+	// Set the override — this is how resolveServerConfig() wires --base-branch
+	defaultBranchOverride = "base"
+
+	session, err := NewSessionFromGit(nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	var paths []string
+	for _, f := range session.Files {
+		paths = append(paths, f.Path)
+	}
+
+	// feature.go should appear (added relative to base), base.go should not
+	found := false
+	for _, p := range paths {
+		if p == "feature.go" {
+			found = true
+		}
+		if p == "base.go" {
+			t.Errorf("base.go should not appear — it was committed before the base branch point")
+		}
+	}
+	if !found {
+		t.Errorf("feature.go not found in session files: %v", paths)
+	}
+
+	// BaseRef should be non-empty (a merge-base commit SHA was computed)
+	if session.BaseRef == "" {
+		t.Error("session.BaseRef should be set when diffing against a custom base branch")
+	}
+}
+
+// TestNewSessionFromFiles_BaseBranch verifies that setting defaultBranchOverride
+// causes NewSessionFromFiles to compute a baseRef against the override branch.
+func TestNewSessionFromFiles_BaseBranch(t *testing.T) {
+	dir := initTestRepo(t)
+
+	defaultBranchOnce = sync.Once{}
+	defaultBranchOverride = ""
+
+	origDir, _ := os.Getwd()
+	os.Chdir(dir)
+	defer func() {
+		os.Chdir(origDir)
+		defaultBranchOverride = ""
+		defaultBranchOnce = sync.Once{}
+	}()
+
+	// Create a "base" branch with one file
+	runGit(t, dir, "checkout", "-b", "base")
+	writeFile(t, filepath.Join(dir, "base.go"), "package main\n")
+	runGit(t, dir, "add", "base.go")
+	runGit(t, dir, "commit", "-m", "base branch commit")
+
+	// Create a "feature" branch off "base" with an additional file
+	runGit(t, dir, "checkout", "-b", "feature")
+	writeFile(t, filepath.Join(dir, "feature.go"), "package main\n")
+	runGit(t, dir, "add", "feature.go")
+	runGit(t, dir, "commit", "-m", "feature commit")
+
+	// Set the override — same mechanism as resolveServerConfig()
+	defaultBranchOverride = "base"
+
+	session, err := NewSessionFromFiles([]string{filepath.Join(dir, "feature.go")}, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// BaseRef should be set since we're on "feature", not "base"
+	if session.BaseRef == "" {
+		t.Error("session.BaseRef should be set when defaultBranchOverride points to a different branch")
+	}
+}
+
 // TestParseUnifiedDiff_WithANSIColors verifies that ANSI color codes in git diff
 // output break ParseUnifiedDiff. This motivates the --no-color flag on git commands.
 func TestParseUnifiedDiff_WithANSIColors(t *testing.T) {

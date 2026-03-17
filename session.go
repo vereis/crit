@@ -106,6 +106,10 @@ type CritJSONFile struct {
 }
 
 // NewSessionFromGit creates a session by auto-detecting changed files via git.
+// The base branch is read from DefaultBranch(), which respects the package-level
+// defaultBranchOverride set by resolveServerConfig() when --base-branch is given.
+// We use the global rather than a parameter so that RefreshFileList() during
+// multi-round reviews picks up the same override automatically.
 func NewSessionFromGit(ignorePatterns []string) (*Session, error) {
 	root, err := RepoRoot()
 	if err != nil {
@@ -115,9 +119,10 @@ func NewSessionFromGit(ignorePatterns []string) (*Session, error) {
 	// Compute baseRef FIRST so we use the same value for both file detection and diffs.
 	// Previously these were computed independently which could lead to inconsistencies.
 	branch := CurrentBranch()
+	resolvedBase := DefaultBranch()
 	baseRef := ""
-	if !IsOnDefaultBranch() {
-		baseRef, _ = MergeBase(DefaultBranch())
+	if branch != resolvedBase {
+		baseRef, _ = MergeBase(resolvedBase)
 	}
 
 	var changes []FileChange
@@ -194,6 +199,8 @@ func NewSessionFromGit(ignorePatterns []string) (*Session, error) {
 
 // NewSessionFromFiles creates a session from explicitly provided file or directory paths.
 // When a directory is passed, all files within it are included recursively.
+// The base branch is read from DefaultBranch(), which respects defaultBranchOverride
+// set by resolveServerConfig(). See NewSessionFromGit for rationale.
 func NewSessionFromFiles(paths []string, ignorePatterns []string) (*Session, error) {
 	if len(paths) == 0 {
 		return nil, fmt.Errorf("no files provided")
@@ -246,8 +253,9 @@ func NewSessionFromFiles(paths []string, ignorePatterns []string) (*Session, err
 	if IsGitRepo() {
 		root, _ = RepoRoot()
 		branch = CurrentBranch()
-		if !IsOnDefaultBranch() {
-			baseRef, _ = MergeBase(DefaultBranch())
+		resolvedBase := DefaultBranch()
+		if branch != resolvedBase {
+			baseRef, _ = MergeBase(resolvedBase)
 		}
 	}
 	if root == "" {
