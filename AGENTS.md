@@ -8,14 +8,17 @@ A single-binary Go CLI tool that opens a browser-based UI for reviewing code cha
 
 ```
 crit/
-├── main.go              # Entry point: CLI parsing, subcommands, server setup, graceful shutdown
+├── main.go              # Entry point: subcommand dispatcher + individual runX() functions
 ├── server.go            # HTTP handlers: REST API (session, file, comments CRUD, finish, share, config)
 ├── session.go           # Core state: multi-file session, comment storage, .crit.json persistence, SSE
+├── watch.go             # File/git watching, round-complete handlers, comment carry-forward
 ├── git.go               # Git integration: branch detection, changed files, diff parsing
 ├── github.go            # GitHub PR sync: fetch/post PR comments, crit comment CLI, .crit.json I/O
 ├── config.go            # Config file loading: ~/.crit.config.json + .crit.config.json merge, ignore patterns
 ├── diff.go              # LCS-based line diff for inter-round markdown comparison
 ├── status.go            # Terminal status output formatting
+├── main_test.go         # Subcommand argument parsing tests
+├── testutil_test.go     # Shared test helpers (initTestRepo, runGit, writeFile, flushWrites)
 ├── *_test.go            # Tests for all Go files above
 ├── frontend/
 │   ├── index.html       # HTML shell — references style.css, theme.css, and app.js
@@ -149,7 +152,6 @@ make e2e-report                                       # View HTML report with sc
 
 | File | Mode | What it covers |
 | --- | --- | --- |
-| `smoke.spec.ts` | git | Basic page load |
 | `loading.spec.ts` | git | Branch name, title, file tree, status icons, stats |
 | `loading.filemode.spec.ts` | file | Title, no branch, no diff toggle, document view defaults |
 | `diff-rendering.spec.ts` | git | Split/unified diffs, hunk headers, spacer expand, mode persistence |
@@ -157,13 +159,11 @@ make e2e-report                                       # View HTML report with sc
 | `comments.spec.ts` | git | Add/edit/delete comments on markdown and diff lines, cross-file |
 | `comments.filemode.spec.ts` | file | Comment CRUD on markdown in file mode |
 | `comments-panel.spec.ts` | git | View all comments panel |
-| `comments-panel.filemode.spec.ts` | file | View all comments panel in file mode |
 | `comment-count-badge.spec.ts` | git | Comment count badge in header |
 | `comment-range-highlight.spec.ts` | git | Highlighted line ranges for comments |
 | `multi-form.spec.ts` | git | Multiple comment forms open simultaneously |
 | `cli-comment.spec.ts` | git | `crit comment` CLI writes synced to running server via SSE |
 | `templates.spec.ts` | git | Comment template chips |
-| `templates.filemode.spec.ts` | file | Comment template chips in file mode |
 | `keyboard.spec.ts` | git | j/k navigation, c/e/d shortcuts, ?, t, Shift+F, Escape |
 | `keyboard.filemode.spec.ts` | file | Same keyboard shortcuts in file mode |
 | `theme.spec.ts` | git | Light/dark/system toggle, persistence, file sections, finish review |
@@ -182,8 +182,13 @@ make e2e-report                                       # View HTML report with sc
 | `round-complete.filemode.spec.ts` | file | Multi-round API + frontend in file mode |
 | `share.spec.ts` | git | Share button visibility, config API defaults |
 | `share.filemode.spec.ts` | file | Share in file mode |
+| `share.multifile.spec.ts` | multi | Share in multi-file mode |
 | `viewed.spec.ts` | git | Viewed state persistence across round transitions |
 | `change-nav.filemode.spec.ts` | file | File change navigation |
+| `select-to-comment.spec.ts` | git | Text selection to comment |
+| `word-diff.spec.ts` | git | Word-level diff rendering |
+| `suggestion-diff.spec.ts` | git | Suggestion diff display |
+| `old-side-suggest.spec.ts` | git | Suggestions on old-side (deletion) lines |
 | `toc.singlefile.spec.ts` | single | Table of contents |
 | `toc-scrollspy.singlefile.spec.ts` | single | TOC scroll-spy highlighting |
 | `multifile.multifile.spec.ts` | multi | Loading, code rendering, comments on Go/Elixir, directory files |
@@ -264,7 +269,7 @@ let activeForms = []; // multiple comment forms can be open simultaneously
 ### Source Line Mapping (Markdown Files)
 
 1. Parse markdown with `markdown-it` to get tokens with `token.map` (source line ranges)
-2. `buildLineBlocks()` walks the token stream and creates a flat array of commentable blocks
+2. `buildLineBlocks()` dispatches to per-token-type handlers: `handleFenceToken`, `handleListToken`, `handleTableToken`, `handleBlockquoteToken`
 3. Container tokens (lists, tables, blockquotes) are drilled into — each list item, table row, or blockquote child becomes its own block
 4. Code blocks (`fence` tokens) are split into per-line blocks with syntax highlighting preserved via `splitHighlightedCode()`
 5. Each block gets a gutter entry with its source line number(s)
