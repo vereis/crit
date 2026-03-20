@@ -16,7 +16,7 @@
             pname = "crit";
             inherit version;
             src = self;
-            vendorHash = null;
+            vendorHash = pkgs.lib.fakeHash;
             nativeCheckInputs = [ pkgs.git ];
             ldflags = [ "-s" "-w" "-X main.version=${version}" ];
             meta = with nixpkgs.lib; {
