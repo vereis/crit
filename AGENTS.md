@@ -373,6 +373,8 @@ Before tagging, bump the version in `flake.nix`:
 version = "0.x.y";
 ```
 
+**Nix vendor hash**: `flake.nix` also contains a pinned `vendorHash`. Whenever Go dependencies change (`go.mod`/`go.sum`), this hash must be updated. CI runs `nix build .` on every PR and will fail with the correct replacement hash if it's stale. To update locally: set `vendorHash = pkgs.lib.fakeHash;`, run `nix build .`, and copy the hash from the error output.
+
 Then commit, tag, and push:
 
 ```bash
@@ -382,7 +384,7 @@ git tag v0.x.y && git push origin main v0.x.y
 
 Pushing the tag triggers the workflow, which:
 
-1. Runs tests
+1. Runs tests (including Nix build verification)
 2. Cross-compiles binaries for darwin/linux (arm64/amd64) with the version injected via ldflags
 3. Generates SHA256 checksums
 4. Creates a GitHub release with auto-generated notes and all binaries attached
